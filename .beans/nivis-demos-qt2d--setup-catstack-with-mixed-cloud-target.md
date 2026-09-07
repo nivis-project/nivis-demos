@@ -5,7 +5,8 @@ status: draft
 type: task
 priority: normal
 created_at: 2026-09-07T14:25:54Z
-updated_at: 2026-09-07T14:45:14Z
+updated_at: 2026-09-07T18:11:25Z
+openspec-link: openspec/changes/archive/2026-09-07-catstack-scaffold-and-state-backend
 parent: nivis-demos-78i0
 ---
 
