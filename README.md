@@ -17,6 +17,8 @@ fake.** That is the design, not an unfinished TODO — see
 | `environments/demo.nix`     | the `demo` environment: region, S3 backend, tags           |
 | `stack/000_backend/`        | the state bucket, self-managed (bootstrap first)           |
 | `stack/010_dns/`            | the Route 53 hosted zone for your domain                    |
+| `stack/020_vaultwarden_ec2/`| Vaultwarden on EC2, built from a NixOS image                |
+| `nixos/vaultwarden/`        | the workload module — cloud-agnostic, reused by both demos  |
 | `secrets/`                  | age-encrypted secrets + `secrets.nix` recipient rules       |
 | `nixos/demo-host/`          | a host that proves the agenix wiring; evaluated, never deployed |
 | `stackctl`                  | entrypoint: `./stackctl <env> <domain> <verb> [args...]`   |
@@ -194,6 +196,62 @@ a service that interpolates a value instead of a path, fails the gate.
 
 **Secrets stop at the host boundary.** No catstack domain reads one, so no IR,
 provider config, or state file ever carries secret material.
+
+## Vaultwarden on EC2
+
+The first real workload: a password manager built from a NixOS image, behind
+TLS, with its vault on a volume that survives the machine.
+
+**This one costs money.** An instance, an EBS volume, an Elastic IP and a hosted
+zone all bill by the hour or month. `destroy` when you are done.
+
+It also needs a domain you can delegate (see [DNS](#dns-the-hosted-zone)) and an
+x86_64 build path for the image — on another architecture you need binfmt
+emulation or a remote builder, as `infra` does for its aarch64 image.
+
+### The order that works
+
+```sh
+# 1. the zone, and delegation at your registrar (once) — see the DNS section
+./stackctl demo 010_dns apply
+./stackctl demo 010_dns output          # -> name_servers
+
+# 2. put the admin token where the instance can read it. The VALUE never goes
+#    through nivis: no IR, no plan, no state file. Read the name it expects:
+./stackctl demo 020_vaultwarden_ec2 output    # -> ssm_parameter_name
+aws ssm put-parameter \
+  --name /nivis-demos/demo/vaultwarden/admin-token \
+  --type SecureString --value "$(openssl rand -base64 48)"
+
+# 3. build the image, upload it, register the AMI, launch, and bind DNS — one apply
+./stackctl demo 020_vaultwarden_ec2 apply
+
+# 4. when you are done
+./stackctl demo 020_vaultwarden_ec2 destroy
+```
+
+Step 3 creates the Elastic IP and the A record **in the same apply**: the address
+EC2 allocates re-enters Nix to produce the record. Nobody copies an IP by hand.
+
+### Waiting for the certificate
+
+Caddy requests a certificate at boot. Until your registrar's name servers point
+at the hosted zone, the name does not resolve and issuance fails — that is
+expected, and **no further apply is needed**: Caddy retries on its own schedule
+and the certificate arrives once delegation propagates. Propagation time is not
+under anyone's control here.
+
+Without the SSM parameter, Vaultwarden does not start at all, by design: a
+missing admin token disables the feature rather than serving an unauthenticated
+admin page.
+
+### What survives a change
+
+Changing the NixOS configuration builds a new image and **replaces the
+instance**. The data volume, the Elastic IP and the A record are separate
+resources and are not replaced, so the vault and the address survive. That is
+the lesson worth taking from this demo: the machine is disposable, the data is
+not.
 
 ## Working on a domain
 

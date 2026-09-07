@@ -59,6 +59,9 @@
       domainsFor = env: {
         "000_backend" = mkDomain env ./stack/000_backend/domain.nix;
         "010_dns" = mkDomain env ./stack/010_dns/domain.nix;
+        # `nixosImage` is deliberately NOT passed here: the checks must never
+        # force an image build. A real apply supplies it (see the README).
+        "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix;
       };
 
       systems = [
@@ -93,15 +96,26 @@
 
       # Hosts. Evaluated by the checks, never deployed — see
       # nixos/demo-host/configuration.nix.
+      # The EC2 host. Evaluated by the checks; built into an Amazon image only
+      # when a real apply asks for one (see `vaultwardenImage`).
       nixosHosts = {
-        demo-host = nixpkgs.lib.nixosSystem {
+        vaultwarden-ec2 = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           modules = [
             agenix.nixosModules.default
-            ./nixos/demo-host/configuration.nix
+            (import ./nixos/vaultwarden-ec2/configuration.nix {
+              domain = checkVars.domain;
+              ssmParameterName = "/nivis-demos/demo/vaultwarden/admin-token";
+              awsRegion = environments.demo.aws.region;
+            })
           ];
         };
       };
+
+      # The bootable image the EC2 domain uploads. Building it is expensive and
+      # needs an x86_64 build path, so it is NEVER forced by the checks: the
+      # domain takes `nixosImage ? null` and substitutes a placeholder.
+      vaultwardenImage = nixosHosts.vaultwarden-ec2.config.system.build.amazonImage;
 
       # tests/*.nix are evaluation tests: each is `{ nivis, irs, envs } -> [ { name, ok, ... } ]`.
       # They must be pure (no credentials, no network, no provider process), so
@@ -110,6 +124,8 @@
       evalTestFiles = [
         ./tests/000_backend.nix
         ./tests/010_dns.nix
+        ./tests/020_vaultwarden_ec2.nix
+        ./tests/vaultwarden-module.nix
         ./tests/vars.nix
         ./tests/secrets.nix
       ];
@@ -125,6 +141,16 @@
             inherit checkVars;
             envs = environments;
             hosts = nixosHosts;
+            # A domain evaluated WITH an image, so a test can prove the image
+            # becomes a __build leaf. Uses a trivial derivation, not the real
+            # image: the checks must never force an image build.
+            withImage =
+              img:
+              import ./stack/020_vaultwarden_ec2/domain.nix {
+                nivis = nivis.lib;
+                env = environments.demo;
+                nixosImage = img;
+              };
             secretsRules = import ./secrets/secrets.nix;
           }
         ) evalTestFiles

@@ -55,6 +55,12 @@ bash scripts/ship-change.sh <change-name> "<commit subject>"
 ./stackctl demo 010_dns apply
 ./stackctl demo 010_dns output          # name_servers -> set at your registrar (once)
 
+# Vaultwarden on EC2 (costs money; needs a delegated domain)
+./stackctl demo 020_vaultwarden_ec2 output   # -> ssm_parameter_name, public_ip, url
+aws ssm put-parameter --name <ssm_parameter_name> --type SecureString --value ...
+./stackctl demo 020_vaultwarden_ec2 apply    # image -> AMI -> instance -> A record
+./stackctl demo 020_vaultwarden_ec2 destroy
+
 # Configuration variables — account-specific values, never edited into a
 # tracked file. Precedence: NIVIS_VAR_* < --var-file < --var
 echo '{ "stateBucket": "..." }' > environments/demo.vars.json   # gitignored

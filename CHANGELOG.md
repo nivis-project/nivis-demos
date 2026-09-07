@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Domain evaluation tests: `tests/*.nix` assert on a domain's IR at flake-eval
   time (no credentials, no network), so a failing assertion fails
   `nix flake check` before anything is built.
+- Vaultwarden on EC2 (`stack/020_vaultwarden_ec2`): a NixOS image built by this
+  repo becomes an AMI and is launched behind Caddy with TLS. The vault lives on
+  its own EBS volume and the address on an Elastic IP, so replacing the machine
+  keeps both — and the A record is bound from the allocated address inside the
+  same apply. Applying it costs money and needs a delegated domain.
+- The Vaultwarden workload is a cloud-agnostic NixOS module (`nixos/vaultwarden`),
+  so the coming Hetzner demo imports it unchanged.
+- Secrets for cloud hosts are delivered out of band: the domain grants the
+  instance permission to read one SSM parameter by name, and the value is put
+  there with `aws ssm put-parameter`. No secret value enters an IR, a plan, or a
+  state file.
 - DNS: `stack/010_dns` manages the Route 53 hosted zone for your domain and
   outputs its name servers for a one-time registrar delegation. The zone is its
   own domain so destroying a workload never takes your name servers with it.

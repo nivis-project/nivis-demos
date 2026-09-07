@@ -51,6 +51,23 @@
     domain = {
       type = "str";
     };
+
+    # Distinguishes this stack's globally-scoped AWS names (the vmimport role,
+    # the image bucket, the AMI) so two demos can coexist in one account.
+    suffix = {
+      type = "str";
+      default = "demo";
+    };
+
+    instanceType = {
+      type = "str";
+      default = "t3.small";
+    };
+
+    dataVolumeSizeGb = {
+      type = "int";
+      default = 8;
+    };
   };
 
   # Remote state (the catstack .tfbackend role). The bucket comes from the
