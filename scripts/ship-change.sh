@@ -77,12 +77,28 @@ done
 if [[ ${#PATHS[@]} -eq 0 ]]; then
   echo "    nothing from this change to commit in the store" >&2
 else
+  # A detached HEAD here is silently destructive: the commit lands on no branch
+  # and `push origin main` then reports "Everything up-to-date" while the archive
+  # is orphaned. Refuse rather than pretend to have shipped.
+  STORE_BRANCH="$(git -C "$OSROOT" branch --show-current)"
+  if [[ "$STORE_BRANCH" != "main" ]]; then
+    echo "ship: the store at ${OSROOT} is not on main (branch: '${STORE_BRANCH:-detached HEAD}')." >&2
+    echo "      Committing here would not reach origin/main. Fix the store first:" >&2
+    echo "        git -C ${OSROOT} checkout main" >&2
+    exit 1
+  fi
+
   git -C "$OSROOT" add -A -- "${PATHS[@]}"
   if git -C "$OSROOT" diff --cached --quiet; then
     echo "    store already up to date for ${CHANGE}"
   else
     git -C "$OSROOT" commit -m "Archive ${CHANGE} (nivis-demos)"
     git -C "$OSROOT" push origin main
+    # Prove it actually landed: `push` can no-op without failing.
+    if [[ "$(git -C "$OSROOT" rev-parse main)" != "$(git -C "$OSROOT" rev-parse origin/main)" ]]; then
+      echo "ship: store push did not land — main and origin/main differ" >&2
+      exit 1
+    fi
   fi
 fi
 
