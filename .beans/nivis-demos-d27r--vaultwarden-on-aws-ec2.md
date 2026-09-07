@@ -5,7 +5,8 @@ status: in-progress
 type: epic
 priority: normal
 created_at: 2026-09-07T14:44:54Z
-updated_at: 2026-09-07T19:10:36Z
+updated_at: 2026-09-07T19:32:56Z
+openspec-link: openspec/changes/archive/2026-09-07-dns-zone
 parent: nivis-demos-z5uc
 ---
 
