@@ -10,14 +10,25 @@
 { nivis, env }:
 ledger:
 let
-  inherit (nivis) mkResource mkProvider toIR;
+  inherit (nivis)
+    mkResource
+    mkProvider
+    toIR
+    mkVars
+    ;
+
+  # Account-specific values arrive as configuration variables, resolved against
+  # what the executor injected for this run (see environments/demo.nix). The
+  # bucket resource and the backend below both read the SAME resolved value, so
+  # they can never disagree about which bucket holds the state.
+  vars = mkVars env.vars (ledger.vars or { });
 
   bucket = mkResource {
     provider = "aws";
     type = "aws_s3_bucket";
     name = "state";
     config = {
-      bucket = env.backend.bucket;
+      bucket = vars.stateBucket;
       tags = env.tags;
     };
   };
@@ -64,6 +75,7 @@ toIR {
   #   ./stackctl demo 000_backend apply          # no changes
   # Every other domain just uses the bucket, under its own key.
   backend = env.backend // {
+    bucket = vars.stateBucket;
     key = "000_backend/state.json";
   };
 

@@ -101,6 +101,43 @@ else
   ok "extra arguments are forwarded to nivis unchanged"
 fi
 
+# --- --var-file: absent -> no flag; present -> forwarded ------------------
+rm -f "$NIVIS_ARGV_OUT"
+"${stackctl[@]}" demo 000_backend plan
+argv=$(cat "$NIVIS_ARGV_OUT")
+if grep -qx -- "--var-file" <<<"$argv"; then
+  bad "--var-file must not be passed when the vars file does not exist (got: $argv)"
+else
+  ok "no --var-file when environments/demo.vars.json is absent"
+fi
+
+rm -f "$NIVIS_ARGV_OUT"
+printf '{ "stateBucket": "a-real-looking-bucket-name" }\n' > "$repo/environments/demo.vars.json"
+"${stackctl[@]}" demo 000_backend plan
+argv=$(cat "$NIVIS_ARGV_OUT")
+if ! grep -qx -- "--var-file" <<<"$argv"; then
+  bad "--var-file must be passed when the vars file exists (got: $argv)"
+elif ! grep -qx -- "$repo/environments/demo.vars.json" <<<"$argv"; then
+  bad "--var-file must name the environment's vars file (got: $argv)"
+else
+  ok "--var-file environments/demo.vars.json forwarded when present"
+fi
+
+# A one-off --var must still be passed, and after the file so it wins.
+rm -f "$NIVIS_ARGV_OUT"
+"${stackctl[@]}" demo 000_backend plan --var stateBucket=cli-wins
+argv=$(cat "$NIVIS_ARGV_OUT")
+file_pos=$(grep -nx -- "--var-file" <<<"$argv" | cut -d: -f1)
+flag_pos=$(grep -nx -- "--var" <<<"$argv" | cut -d: -f1)
+if [ -z "$flag_pos" ]; then
+  bad "--var must be forwarded (got: $argv)"
+elif [ -n "$file_pos" ] && [ "$flag_pos" -lt "$file_pos" ]; then
+  bad "--var must come after --var-file so the flag wins (got: $argv)"
+else
+  ok "--var is forwarded after --var-file, preserving precedence"
+fi
+rm -f "$repo/environments/demo.vars.json"
+
 if [ "$fails" -ne 0 ]; then
   echo "stackctl: $fails assertion(s) failed" >&2
   exit 1

@@ -51,6 +51,16 @@ bash scripts/ship-change.sh <change-name> "<commit subject>"
 # Extra args are forwarded to nivis unchanged (e.g. --backend=local).
 # First-time bucket bootstrap is in README.md.
 
+# Configuration variables — account-specific values, never edited into a
+# tracked file. Precedence: NIVIS_VAR_* < --var-file < --var
+echo '{ "stateBucket": "..." }' > environments/demo.vars.json   # gitignored
+./stackctl demo 000_backend plan --var stateBucket=...
+
+# Secrets (agenix) — fake values, encrypted to the maintainer only.
+agenix -e vaultwarden-admin-token.age    # from secrets/
+# To take ownership: put your key in secrets/secrets.nix, `rm secrets/*.age`,
+# then recreate. `agenix -r` cannot help — it decrypts before re-encrypting.
+
 # Nix
 nix develop                  # dev shell: nivis, awscli2, hcloud, age
 nix flake check              # the gate: build + tests + coverage

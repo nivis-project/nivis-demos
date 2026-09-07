@@ -4,3 +4,14 @@
 # Nix build results
 result
 result-*
+
+# Real, account-specific variable values (never committed; ./stackctl passes
+# them with --var-file when present).
+environments/*.vars.json
+
+# age identities / private keys — never committed.
+*.key
+*.agekey
+id_ed25519
+id_rsa
+keys.txt

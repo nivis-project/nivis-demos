@@ -4,9 +4,9 @@
 # provider process. Returns a list of { name, ok, detail? }; flake.nix forces
 # every entry, so a failure fails `nix flake check` before anything is built.
 {
-  nivis,
   irs,
   envs,
+  ...
 }:
 let
   ir = irs."000_backend";
@@ -53,7 +53,7 @@ in
   # --- 3.1 the bucket ----------------------------------------------------
   (t "000_backend: declares the state bucket resource" (hasId bucketId))
   (tWith "000_backend: bucket name comes from the environment, not hardcoded" (
-    bucket.config.bucket == env.backend.bucket
+    bucket.config.bucket == env.vars.stateBucket.default
   ) "got ${toString bucket.config.bucket}")
   (t "000_backend: bucket carries the environment tags" (bucket.config.tags == env.tags))
 
@@ -89,7 +89,7 @@ in
   (t "000_backend: declares a state backend" (ir ? backend))
   (t "000_backend: backend type comes from the environment" (ir.backend.type == env.backend.type))
   (tWith "000_backend: backend bucket comes from the environment" (
-    ir.backend.bucket == env.backend.bucket
+    ir.backend.bucket == env.vars.stateBucket.default
   ) "got ${toString ir.backend.bucket}")
   (t "000_backend: backend region comes from the environment" (
     ir.backend.region == env.backend.region
@@ -126,9 +126,9 @@ in
   # --- public-repo safety (2.2) ------------------------------------------
   (tWith "demo env: bucket name is a deliberately invalid placeholder" (
     let
-      b = env.backend.bucket;
+      b = env.vars.stateBucket.default;
       valid = builtins.match "[a-z0-9][a-z0-9.-]*[a-z0-9]" b != null;
     in
     !valid
-  ) "bucket ${env.backend.bucket} looks like a real S3 name; it must be invalid on purpose")
+  ) "bucket ${env.vars.stateBucket.default} looks like a real S3 name; it must be invalid on purpose")
 ]

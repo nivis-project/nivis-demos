@@ -16,6 +16,8 @@ fake.** That is the design, not an unfinished TODO — see
 | --------------------------- | --------------------------------------------------------- |
 | `environments/demo.nix`     | the `demo` environment: region, S3 backend, tags           |
 | `stack/000_backend/`        | the state bucket, self-managed (bootstrap first)           |
+| `secrets/`                  | age-encrypted secrets + `secrets.nix` recipient rules       |
+| `nixos/demo-host/`          | a host that proves the agenix wiring; evaluated, never deployed |
 | `stackctl`                  | entrypoint: `./stackctl <env> <domain> <verb> [args...]`   |
 | `tests/*.nix`               | evaluation tests over a domain's IR (no credentials)       |
 | `tests/*.sh`                | script tests (e.g. `stackctl` argument handling)           |
@@ -38,10 +40,11 @@ run the whole gate offline of AWS.
 
 ## Before you apply anything
 
-`environments/demo.nix` ships a bucket name that **S3 cannot accept**:
+`environments/demo.nix` declares the state bucket with a default **S3 cannot
+accept**:
 
 ```nix
-bucket = "REPLACE_ME-nivis-demos-state";
+vars.stateBucket.default = "REPLACE_ME-nivis-demos-state";
 ```
 
 `_` and uppercase are outside S3's bucket-naming grammar, so AWS rejects it
@@ -50,7 +53,12 @@ plausible-looking placeholder would be worse: it is squattable, and every clone'
 first apply would fail with a confusing `BucketAlreadyExists` from a bucket
 nobody here controls.
 
-Replace it with your own globally-unique bucket name before step 1 below.
+Supply your own globally-unique name before step 1 below — you do **not** edit
+`environments/demo.nix` to do it (see [Configuration variables](#configuration-variables)):
+
+```sh
+echo '{ "stateBucket": "my-nivis-demos-state" }' > environments/demo.vars.json
+```
 
 ## Bootstrap: the state bucket
 
@@ -77,6 +85,70 @@ bucket and this recipe.
 Local state from step 1 lands in `state/<env>/<domain>.state.json`, which is
 gitignored. After step 2 it is gone: `state migrate` removes the source only
 after reading the destination back and verifying it.
+
+## Configuration variables
+
+Account-specific values are **declared** in `environments/<env>.nix` with a
+deliberately fake default, and supplied at run time — you never edit a tracked
+file to set one:
+
+```sh
+# a) an untracked vars file; ./stackctl passes it with --var-file when present
+echo '{ "stateBucket": "my-nivis-demos-state" }' > environments/demo.vars.json
+
+# b) the environment
+NIVIS_VAR_stateBucket=my-nivis-demos-state ./stackctl demo 000_backend plan
+
+# c) a one-off, highest precedence
+./stackctl demo 000_backend plan --var stateBucket=my-nivis-demos-state
+```
+
+Precedence is nivis's own, lowest to highest: `NIVIS_VAR_*` < `--var-file` <
+`--var`. `environments/*.vars.json` is gitignored, so real values cannot be
+committed by accident.
+
+`nix flake check` deliberately runs on the fake defaults — the checks never
+depend on a file you have not committed. A variable declared without a default is
+required, and evaluation fails naming it rather than proceeding with a
+placeholder.
+
+## Secrets
+
+Secrets are age-encrypted at rest under `secrets/`, with `secrets/secrets.nix`
+declaring which keys may decrypt which file. **Nothing here is real**: the
+committed `.age` files hold deliberately fake values, exactly like the
+environment's fake defaults. They are committed so the wiring can be read.
+
+They are encrypted to the maintainer's key only, so **you cannot decrypt them** —
+that is expected. To take ownership:
+
+```sh
+# 1. put your own public key in secrets/secrets.nix (replace `maintainer`)
+# 2. delete the files you cannot read
+rm secrets/*.age
+# 3. create them again, with any fake value you like
+agenix -e vaultwarden-admin-token.age
+```
+
+Step 2 is not optional. `agenix -r` (re-key) and `agenix -e` on an existing file
+both **decrypt before they re-encrypt**, so they need an identity that can
+already read the file. Since every value is fake, recreating is the whole job.
+
+How a secret reaches a service — the pattern worth copying:
+
+- `secrets/secrets.nix` lists recipients. A real host is added by its **ssh host
+  public key**, so it can decrypt at activation.
+- The host declares `age.secrets.<name>.file`, and agenix decrypts it at
+  activation to `config.age.secrets.<name>.path`, owned by root.
+- The service consumes that **path** (`EnvironmentFile`), never the value. So the
+  secret never enters the Nix store, a unit file, or a process argument list.
+
+`nixos/demo-host` exists only to make that wiring real: it is evaluated by
+`nix flake check` and never deployed, so a secret missing from `secrets.nix`, or
+a service that interpolates a value instead of a path, fails the gate.
+
+**Secrets stop at the host boundary.** No catstack domain reads one, so no IR,
+provider config, or state file ever carries secret material.
 
 ## Working on a domain
 
@@ -105,6 +177,7 @@ See `tests/README.md`.
 
 1. `stack/NNN_<name>/domain.nix` — a `{ nivis, env } -> ledger -> IR` function.
 2. Register it in `flake.nix` under `domainsFor`.
-3. Give it a state key of `<name>/state.json`.
+3. Give it a state key of `<name>/state.json`, and declare any account-specific
+   value as a variable in `environments/<env>.nix` rather than a literal.
 4. Write `tests/<name>.nix` asserting on its IR — that is what the coverage gate
    counts. `stackctl` needs no edit.

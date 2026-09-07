@@ -51,8 +51,18 @@ fi
 
 mkdir -p "$repo_root/state/$env_name"
 
+# Real, account-specific values live in an untracked vars file. It is passed only
+# when it exists, so a fresh clone runs on the fake defaults declared in
+# environments/<env>.nix. --var on the command line still wins over it.
+var_args=()
+vars_file="$repo_root/environments/$env_name.vars.json"
+if [ -f "$vars_file" ]; then
+  var_args=(--var-file "$vars_file")
+fi
+
 exec nivis "$verb" \
   --flake "$repo_root" \
   --attr "nivis.$env_name.\"$domain\"" \
   --state "$repo_root/state/$env_name/$domain.state.json" \
+  "${var_args[@]+"${var_args[@]}"}" \
   "$@"

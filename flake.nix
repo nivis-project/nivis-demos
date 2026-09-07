@@ -8,10 +8,16 @@
     # resolves over https with no credentials — a fresh clone can run the gate.
     nivis.url = "github:nivis-project/nivis";
 
+    # Secrets at rest: age-encrypted files + the NixOS module that decrypts them
+    # at activation. See secrets/secrets.nix for the recipient rules.
+    agenix = {
+      url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Added when the first domain that references them lands:
     #   hcloudimage.url = "github:nivis-project/terraform-provider-hcloudimage";
     #   nixos-generators.url = "github:nix-community/nixos-generators";
-    #   agenix.url = "github:ryantm/agenix";
   };
 
   outputs =
@@ -19,6 +25,7 @@
       self,
       nixpkgs,
       nivis,
+      agenix,
     }:
     let
       # The gate `/mip:ship` enforces, and the single source of truth for it.
@@ -67,12 +74,26 @@
       };
       irsFor = env: builtins.mapAttrs (_: domain: domain emptyLedger) (domainsFor env);
 
+      # Hosts. Evaluated by the checks, never deployed — see
+      # nixos/demo-host/configuration.nix.
+      nixosHosts = {
+        demo-host = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            agenix.nixosModules.default
+            ./nixos/demo-host/configuration.nix
+          ];
+        };
+      };
+
       # tests/*.nix are evaluation tests: each is `{ nivis, irs, envs } -> [ { name, ok, ... } ]`.
       # They must be pure (no credentials, no network, no provider process), so
       # they run at eval time and a failure fails `nix flake check` before any
       # build. See tests/README.md.
       evalTestFiles = [
         ./tests/000_backend.nix
+        ./tests/vars.nix
+        ./tests/secrets.nix
       ];
       evalTestResults = builtins.concatLists (
         map (
@@ -80,7 +101,12 @@
           import f {
             nivis = nivis.lib;
             irs = irsFor environments.demo;
+            # The raw `ledger -> IR` functions, so a test can evaluate a domain
+            # against an injected ledger (e.g. overridden vars).
+            domains = domainsFor environments.demo;
             envs = environments;
+            hosts = nixosHosts;
+            secretsRules = import ./secrets/secrets.nix;
           }
         ) evalTestFiles
       );
@@ -92,6 +118,8 @@
     {
       # Catstack domains, one flake attr + one state key each.
       nivis = builtins.mapAttrs (_: env: domainsFor env) environments;
+
+      nixosConfigurations = nixosHosts;
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {

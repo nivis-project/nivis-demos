@@ -22,3 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Domain evaluation tests: `tests/*.nix` assert on a domain's IR at flake-eval
   time (no credentials, no network), so a failing assertion fails
   `nix flake check` before anything is built.
+- Secrets with agenix: age-encrypted files under `secrets/` with recipient rules
+  in `secrets/secrets.nix`, and a `demo-host` NixOS configuration that is
+  evaluated by `nix flake check` (never deployed) so the wiring is checked — a
+  secret missing from the rules, or a service using a secret's value instead of
+  its path, fails the gate. Committed values are deliberately fake.
+- Account-specific configuration now uses nivis variables instead of literals in
+  the environment: `environments/<env>.nix` declares them with fake defaults, and
+  real values come from a gitignored `environments/<env>.vars.json` (passed by
+  `stackctl`), `NIVIS_VAR_*`, or `--var`. Nothing real is edited into a tracked
+  file, and `nix flake check` runs on the fake defaults.
