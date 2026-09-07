@@ -1,0 +1,6 @@
+# Pre-bootstrap local state (see ./stackctl --state); never committed.
+/state/
+
+# Nix build results
+result
+result-*

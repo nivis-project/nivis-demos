@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# stackctl — catstack entrypoint: run one nivis verb against one domain.
+#
+#   ./stackctl <env> <domain> <verb> [extra nivis args...]
+#
+#   ./stackctl demo 000_backend plan
+#   ./stackctl demo 000_backend apply
+#   ./stackctl demo 000_backend output
+#
+# Domains declare their own state location (see environments/<env>.nix); the
+# local --state path below is the pre-bootstrap fallback and is gitignored.
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")" && pwd)
+
+# The environments and domains that actually exist, from the filesystem, so
+# adding either needs no edit here.
+list_names() {
+  local pattern=$1 strip=$2 path name out=()
+  for path in $pattern; do
+    [ -e "${path%/}" ] || continue
+    name=${path%/}
+    name=${name##*/}
+    out+=("${name%"$strip"}")
+  done
+  echo "${out[*]-}"
+}
+
+usage() {
+  echo "usage: $0 <env> <domain> <verb> [extra nivis args...]" >&2
+  echo "  environments: $(list_names "$repo_root/environments/*.nix" .nix)" >&2
+  echo "  domains: $(list_names "$repo_root/stack/*/" '')" >&2
+  exit 64
+}
+
+[ $# -ge 3 ] || usage
+
+env_name=$1
+domain=$2
+verb=$3
+shift 3
+
+if [ ! -f "$repo_root/environments/$env_name.nix" ]; then
+  echo "unknown environment: $env_name" >&2
+  usage
+fi
+if [ ! -d "$repo_root/stack/$domain" ]; then
+  echo "unknown domain: $domain" >&2
+  usage
+fi
+
+mkdir -p "$repo_root/state/$env_name"
+
+exec nivis "$verb" \
+  --flake "$repo_root" \
+  --attr "nivis.$env_name.\"$domain\"" \
+  --state "$repo_root/state/$env_name/$domain.state.json" \
+  "$@"
