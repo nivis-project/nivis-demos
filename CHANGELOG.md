@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Domain evaluation tests: `tests/*.nix` assert on a domain's IR at flake-eval
   time (no credentials, no network), so a failing assertion fails
   `nix flake check` before anything is built.
+- DNS: `stack/010_dns` manages the Route 53 hosted zone for your domain and
+  outputs its name servers for a one-time registrar delegation. The zone is its
+  own domain so destroying a workload never takes your name servers with it.
+- Configuration variables may now be **required**: declared with no default, they
+  fail by name when unset rather than acting on a placeholder. `domain` is the
+  first — no fake domain name is safe, since a certificate would be requested for
+  it. The checks use an internal `demo.invalid` fixture, so `nix flake check`
+  still passes on a fresh clone with nothing supplied.
 - Secrets with agenix: age-encrypted files under `secrets/` with recipient rules
   in `secrets/secrets.nix`, and a `demo-host` NixOS configuration that is
   evaluated by `nix flake check` (never deployed) so the wiring is checked — a

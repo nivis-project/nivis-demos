@@ -16,6 +16,7 @@ fake.** That is the design, not an unfinished TODO — see
 | --------------------------- | --------------------------------------------------------- |
 | `environments/demo.nix`     | the `demo` environment: region, S3 backend, tags           |
 | `stack/000_backend/`        | the state bucket, self-managed (bootstrap first)           |
+| `stack/010_dns/`            | the Route 53 hosted zone for your domain                    |
 | `secrets/`                  | age-encrypted secrets + `secrets.nix` recipient rules       |
 | `nixos/demo-host/`          | a host that proves the agenix wiring; evaluated, never deployed |
 | `stackctl`                  | entrypoint: `./stackctl <env> <domain> <verb> [args...]`   |
@@ -85,6 +86,50 @@ bucket and this recipe.
 Local state from step 1 lands in `state/<env>/<domain>.state.json`, which is
 gitignored. After step 2 it is gone: `state migrate` removes the source only
 after reading the destination back and verifying it.
+
+## DNS: the hosted zone
+
+`stack/010_dns` manages the Route 53 hosted zone for your domain. It is a
+separate domain on purpose — a zone outlives every machine that answers to it, so
+destroying a demo must not take your name servers with it.
+
+The domain name is a **required variable with no default**. The repo never learns
+it, and it must never be committed:
+
+```sh
+# 1. supply your domain (gitignored; or use --var / NIVIS_VAR_domain)
+echo '{ "domain": "demo.example.com" }' > environments/demo.vars.json
+
+# 2. create the zone
+./stackctl demo 010_dns apply
+
+# 3. read the name servers
+./stackctl demo 010_dns output      # -> name_servers, zone_id
+```
+
+**Then delegate, once per environment**: set those name servers as the `NS`
+records for that name at your registrar. This is manual and cannot be automated
+from here.
+
+A **delegated subdomain** (`demo.example.com`) is usually the right choice: you
+add NS records for just that label and your apex stays where it is. Delegating a
+whole domain works too, but moves its DNS into Route 53 entirely.
+
+Nothing that needs a certificate can work until delegation has propagated, and
+propagation time is not under anyone's control here.
+
+Forgetting the variable fails immediately, by name:
+
+```
+error: nivis.mkVars: required variable 'domain' is not set (declare a default or pass --var domain=...)
+```
+
+A hosted zone costs about $0.50/month whether or not anything uses it —
+`./stackctl demo 010_dns destroy` when you are done.
+
+> The checks use a fixture value, `demo.invalid` (RFC 2606 — a name that can
+> never resolve), so `nix flake check` runs on a fresh clone with no domain. That
+> fixture is checks-only and never reaches an apply.
 
 ## Configuration variables
 

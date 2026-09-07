@@ -1,11 +1,11 @@
 ---
 # nivis-demos-d27r
 title: Vaultwarden on AWS EC2
-status: todo
+status: in-progress
 type: epic
 priority: normal
 created_at: 2026-09-07T14:44:54Z
-updated_at: 2026-09-07T14:45:14Z
+updated_at: 2026-09-07T19:10:36Z
 parent: nivis-demos-z5uc
 ---
 

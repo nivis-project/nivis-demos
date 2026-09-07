@@ -34,6 +34,23 @@
       type = "str";
       default = "REPLACE_ME-nivis-demos-state";
     };
+
+    # REQUIRED — no default, deliberately. Every other variable here carries a
+    # fake default because a fake value fails harmlessly: an invalid bucket name
+    # is simply rejected by S3. That reasoning does not extend to a domain name.
+    # Any syntactically valid placeholder is a name somebody else owns, and a
+    # certificate would be requested for it. So this fails by name when unset:
+    #
+    #   nivis.mkVars: variable 'domain' is required (no default) and was not set
+    #
+    # Supply it per run — never in a tracked file (this repo is public, and a
+    # hostname is exactly what must not land in it):
+    #
+    #   echo '{ "domain": "demo.example.com" }' > environments/demo.vars.json
+    #   ./stackctl demo 010_dns apply --var domain=demo.example.com
+    domain = {
+      type = "str";
+    };
   };
 
   # Remote state (the catstack .tfbackend role). The bucket comes from the

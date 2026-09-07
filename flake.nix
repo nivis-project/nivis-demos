@@ -58,6 +58,7 @@
       # Every domain, for every environment: nivis.<env>."<domain>".
       domainsFor = env: {
         "000_backend" = mkDomain env ./stack/000_backend/domain.nix;
+        "010_dns" = mkDomain env ./stack/010_dns/domain.nix;
       };
 
       systems = [
@@ -69,10 +70,26 @@
       # Domain IRs with an empty ledger — the shape tests assert on, and what
       # `build-domains` forces. A domain is `ledger -> IR`, and phase 0 (before
       # anything is applied) is exactly the empty ledger.
-      emptyLedger = {
-        outputs = { };
+      # Values for REQUIRED variables (declared with no default) so the CHECKS can
+      # evaluate every domain on a fresh clone with no variable source present.
+      #
+      # This is checks-only, and structurally so rather than by convention: a real
+      # run evaluates `nivis.<env>."<domain>"`, the bare `ledger -> IR` function
+      # that the executor applies its OWN ledger to. `irsFor` below is a
+      # checks-only convenience and is not on that path, so nothing here can leak
+      # into an apply — an apply without `domain` still fails by name.
+      #
+      # `.invalid` is reserved by RFC 2606 and can never resolve, so even a
+      # mistake cannot reach a real name.
+      checkVars = {
+        domain = "demo.invalid";
       };
-      irsFor = env: builtins.mapAttrs (_: domain: domain emptyLedger) (domainsFor env);
+
+      checkLedger = {
+        outputs = { };
+        vars = checkVars;
+      };
+      irsFor = env: builtins.mapAttrs (_: domain: domain checkLedger) (domainsFor env);
 
       # Hosts. Evaluated by the checks, never deployed — see
       # nixos/demo-host/configuration.nix.
@@ -92,6 +109,7 @@
       # build. See tests/README.md.
       evalTestFiles = [
         ./tests/000_backend.nix
+        ./tests/010_dns.nix
         ./tests/vars.nix
         ./tests/secrets.nix
       ];
@@ -104,6 +122,7 @@
             # The raw `ledger -> IR` functions, so a test can evaluate a domain
             # against an injected ledger (e.g. overridden vars).
             domains = domainsFor environments.demo;
+            inherit checkVars;
             envs = environments;
             hosts = nixosHosts;
             secretsRules = import ./secrets/secrets.nix;

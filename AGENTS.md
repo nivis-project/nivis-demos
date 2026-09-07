@@ -51,6 +51,10 @@ bash scripts/ship-change.sh <change-name> "<commit subject>"
 # Extra args are forwarded to nivis unchanged (e.g. --backend=local).
 # First-time bucket bootstrap is in README.md.
 
+# DNS — the hosted zone. `domain` is REQUIRED (no default); supply it per run.
+./stackctl demo 010_dns apply
+./stackctl demo 010_dns output          # name_servers -> set at your registrar (once)
+
 # Configuration variables — account-specific values, never edited into a
 # tracked file. Precedence: NIVIS_VAR_* < --var-file < --var
 echo '{ "stateBucket": "..." }' > environments/demo.vars.json   # gitignored
