@@ -40,16 +40,56 @@ git add -A
 echo "==> [2/6] gate: nix flake check"
 nix flake check
 
+# Which capabilities does this change touch? Read it BEFORE archiving moves the
+# directory away. Archive folds these deltas into openspec/specs/<capability>/,
+# and those are the only spec paths this ship may commit.
+CAPS=()
+if [[ -d "${CHANGE_DIR}/specs" ]]; then
+  while IFS= read -r dir; do
+    CAPS+=("${dir#"${CHANGE_DIR}/specs/"}")
+  done < <(find "${CHANGE_DIR}/specs" -mindepth 1 -name spec.md -printf '%h\n' | sort -u)
+fi
+
 echo "==> [3/6] archive OpenSpec change: ${CHANGE}"
 openspec archive "${CHANGE}" --yes
 
 echo "==> [4/6] commit + push the OpenSpec store (${OSROOT})"
-if [[ -n "$(git -C "$OSROOT" status --porcelain)" ]]; then
-  git -C "$OSROOT" add -A
-  git -C "$OSROOT" commit -m "Archive ${CHANGE} (nivis-demos)"
-  git -C "$OSROOT" push origin main
+# The store is SHARED with the other nivis repos, so it routinely holds unrelated
+# in-progress changes. Stage only the paths this ship actually produced —
+# `add -A` would sweep someone else's work into a commit claiming to archive
+# this change.
+ARCHIVED="$(basename "$(find "${OSROOT}/openspec/changes/archive" -maxdepth 1 -type d -name "*-${CHANGE}" | sort | tail -1)")"
+CANDIDATES=("openspec/changes/${CHANGE}")
+[[ -n "$ARCHIVED" ]] && CANDIDATES+=("openspec/changes/archive/${ARCHIVED}")
+for cap in "${CAPS[@]+"${CAPS[@]}"}"; do
+  CANDIDATES+=("openspec/specs/${cap}")
+done
+
+# Keep only paths git can act on: present on disk, or tracked (so a move's
+# deletion side is staged too).
+PATHS=()
+for p in "${CANDIDATES[@]}"; do
+  if [[ -e "${OSROOT}/${p}" ]] || git -C "$OSROOT" ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+    PATHS+=("$p")
+  fi
+done
+
+if [[ ${#PATHS[@]} -eq 0 ]]; then
+  echo "    nothing from this change to commit in the store" >&2
 else
-  echo "    store clean, nothing to push"
+  git -C "$OSROOT" add -A -- "${PATHS[@]}"
+  if git -C "$OSROOT" diff --cached --quiet; then
+    echo "    store already up to date for ${CHANGE}"
+  else
+    git -C "$OSROOT" commit -m "Archive ${CHANGE} (nivis-demos)"
+    git -C "$OSROOT" push origin main
+  fi
+fi
+
+# Anything else dirty in the store is someone else's work: say so, leave it be.
+if [[ -n "$(git -C "$OSROOT" status --porcelain)" ]]; then
+  echo "    note: the store has other uncommitted changes, left untouched:"
+  git -C "$OSROOT" status --porcelain | sed 's/^/      /' | head -10
 fi
 
 echo "==> [5/6] commit"
