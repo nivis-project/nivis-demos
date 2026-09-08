@@ -47,7 +47,7 @@ in
     ir.providers.aws.source == "registry.opentofu.org/hashicorp/aws"
   ))
   (tWith "000_backend: provider region comes from the environment" (
-    ir.providers.aws.config.region == env.aws.region
+    ir.providers.aws.config.region == env.vars.awsRegion.default
   ) "got ${toString ir.providers.aws.config.region}")
 
   # --- 3.1 the bucket ----------------------------------------------------
@@ -60,7 +60,15 @@ in
   # --- 3.2 versioning ----------------------------------------------------
   (t "000_backend: declares bucket versioning" (hasId versioningId))
   (t "000_backend: versioning is Enabled" (
-    versioning.config.versioning_configuration.status == "Enabled"
+    (builtins.head versioning.config.versioning_configuration).status == "Enabled"
+  ))
+  # Provider list-nested block: a bare attrset is accepted by evaluation and
+  # rejected at apply. Found the hard way on a real apply.
+  (t "000_backend: versioning_configuration is a one-element list" (
+    let
+      vc = versioning.config.versioning_configuration;
+    in
+    builtins.isList vc && builtins.length vc == 1
   ))
   (t "000_backend: versioning references the bucket id" (
     isRefTo bucketId "id" versioning.config.bucket
@@ -91,8 +99,13 @@ in
   (tWith "000_backend: backend bucket comes from the environment" (
     ir.backend.bucket == env.vars.stateBucket.default
   ) "got ${toString ir.backend.bucket}")
-  (t "000_backend: backend region comes from the environment" (
-    ir.backend.region == env.backend.region
+  (t "000_backend: backend region comes from the resolved variable" (
+    ir.backend.region == env.vars.awsRegion.default
+  ))
+  # The region used to be written twice — provider and backend — with nothing
+  # keeping them in step. One resolved value now feeds both.
+  (t "000_backend: provider and backend agree on the region" (
+    ir.backend.region == ir.providers.aws.config.region
   ))
   (tWith "000_backend: state key is <domain>/state.json" (
     ir.backend.key == "000_backend/state.json"

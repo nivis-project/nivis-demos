@@ -7,6 +7,8 @@
   envs,
   withImage,
   checkVars,
+  servedName,
+  hosts,
   ...
 }:
 let
@@ -45,6 +47,8 @@ let
   pick = i: id: builtins.head (builtins.filter (r: r.id == id) i.resources);
 
   fakeToken = "fake-demo-token-not-a-real-secret-0000000000";
+  expectedName = servedName "vault-ec2" checkVars.domain;
+  recordName = (byId "aws.aws_route53_record.vaultwarden").config.name;
 
   t = name: ok: { inherit name ok; };
   tWith = name: ok: detail: {
@@ -72,7 +76,7 @@ in
     && has eipId
     && has "aws.aws_eip_association.vaultwarden"
   ))
-  (t "ec2: the A record" (has "aws.aws_route53_record.apex"))
+  (t "ec2: the A record" (has "aws.aws_route53_record.vaultwarden"))
 
   # --- 3.1 no image required to evaluate ----------------------------------
   (tWith "ec2: evaluates with no image, using a placeholder" (
@@ -139,17 +143,36 @@ in
     !(builtins.elem "aws_route53_zone" types)
   ))
   (t "ec2: the A record's value is a ref to the EIP" (
-    isRefTo eipId "public_ip" (builtins.head (byId "aws.aws_route53_record.apex").config.records)
+    isRefTo eipId "public_ip" (builtins.head (byId "aws.aws_route53_record.vaultwarden").config.records)
   ))
-  (t "ec2: the A record name is the resolved domain variable" (
-    (byId "aws.aws_route53_record.apex").config.name == checkVars.domain
+  (tWith "ec2: the A record is a subdomain, not the apex" (
+    recordName == expectedName
+  ) "record name is ${toString recordName}, expected ${expectedName}")
+  (t "ec2: no domain claims the apex" (
+    builtins.all (
+      i: builtins.all (r: r.type != "aws_route53_record" || r.config.name != checkVars.domain) i.resources
+    ) (builtins.attrValues irs)
   ))
+
+  # --- 1.5 one name, everywhere: served, certificate, record ---------------
+  # This is the assertion that would have caught the image serving
+  # `demo.invalid` while the record pointed somewhere else.
+  (tWith "ec2: the served name, the certificate and the A record all agree"
+    (
+      let
+        caddyNames = builtins.attrNames hosts.vaultwarden-ec2.config.services.caddy.virtualHosts;
+        url = hosts.vaultwarden-ec2.config.services.vaultwarden.config.DOMAIN;
+      in
+      caddyNames == [ expectedName ] && url == "https://${expectedName}" && recordName == expectedName
+    )
+    "caddy=${toString (builtins.attrNames hosts.vaultwarden-ec2.config.services.caddy.virtualHosts)} record=${toString recordName}"
+  )
 
   # --- 3.9 replacing the image replaces nothing that must persist ---------
   (t "ec2: a new image does not change the data volume" (pick irA volId == pick irB volId))
   (t "ec2: a new image does not change the Elastic IP" (pick irA eipId == pick irB eipId))
   (t "ec2: a new image does not change the A record" (
-    pick irA "aws.aws_route53_record.apex" == pick irB "aws.aws_route53_record.apex"
+    pick irA "aws.aws_route53_record.vaultwarden" == pick irB "aws.aws_route53_record.vaultwarden"
   ))
 
   # --- 4.1 / 4.2 the secret is granted, never carried ---------------------

@@ -59,8 +59,8 @@
       domainsFor = env: {
         "000_backend" = mkDomain env ./stack/000_backend/domain.nix;
         "010_dns" = mkDomain env ./stack/010_dns/domain.nix;
-        # `nixosImage` is deliberately NOT passed here: the checks must never
-        # force an image build. A real apply supplies it (see the README).
+        # `mkImage` is deliberately NOT passed here: the checks must never build
+        # an image. A real apply passes mkVaultwardenEc2Image (see the README).
         "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix;
       };
 
@@ -86,6 +86,9 @@
       # mistake cannot reach a real name.
       checkVars = {
         domain = "demo.invalid";
+        # Not a real account: 000000000000 is never issued by AWS, so the guard
+        # cannot accidentally authorise anything if this ever escaped.
+        awsAccountId = "000000000000";
       };
 
       checkLedger = {
@@ -94,36 +97,55 @@
       };
       irsFor = env: builtins.mapAttrs (_: domain: domain checkLedger) (domainsFor env);
 
-      # Hosts. Evaluated by the checks, never deployed — see
-      # nixos/demo-host/configuration.nix.
-      # The EC2 host. Evaluated by the checks; built into an Amazon image only
-      # when a real apply asks for one (see `vaultwardenImage`).
-      nixosHosts = {
-        vaultwarden-ec2 = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [
-            agenix.nixosModules.default
-            (import ./nixos/vaultwarden-ec2/configuration.nix {
-              domain = checkVars.domain;
-              ssmParameterName = "/nivis-demos/demo/vaultwarden/admin-token";
-              awsRegion = environments.demo.aws.region;
-            })
-          ];
-        };
-      };
-
-      # The bootable image the EC2 domain uploads. Building it is expensive and
-      # needs an x86_64 build path, so it is NEVER forced by the checks: the
-      # domain takes `nixosImage ? null` and substitutes a placeholder.
-      vaultwardenImage = nixosHosts.vaultwarden-ec2.config.system.build.amazonImage;
-
       # tests/*.nix are evaluation tests: each is `{ nivis, irs, envs } -> [ { name, ok, ... } ]`.
       # They must be pure (no credentials, no network, no provider process), so
       # they run at eval time and a failure fails `nix flake check` before any
       # build. See tests/README.md.
+      # Host images are built as a FUNCTION of the name they will serve.
+      #
+      # A flake output cannot read nivis variables, and the vars file is
+      # gitignored so flake evaluation cannot see it either. Fixing the name here
+      # would bake the checks' fixture (demo.invalid) into the uploaded image —
+      # exactly the defect this replaced. Each domain instead calls the builder
+      # with the name it derived from the resolved `domain` variable.
+      mkVaultwardenEc2Host =
+        { domain, awsRegion }:
+        nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            agenix.nixosModules.default
+            (import ./nixos/vaultwarden-ec2/configuration.nix {
+              inherit domain awsRegion;
+              ssmParameterName = "/nivis-demos/demo/vaultwarden/admin-token";
+            })
+          ];
+        };
+
+      mkVaultwardenEc2Image =
+        {
+          domain,
+          awsRegion,
+        }:
+        (mkVaultwardenEc2Host { inherit domain awsRegion; }).config.system.build.amazonImage;
+
+      # Each workload's own name under the environment's domain. Demos never
+      # claim the apex — that name belongs to the operator, not to an example.
+      servedName = label: domain: "${label}.${domain}";
+
+      # Evaluated by the checks, so this one carries the fixture name. It is NOT
+      # what a real apply uploads: that image comes from mkVaultwardenEc2Image,
+      # built for the resolved name.
+      nixosHosts = {
+        vaultwarden-ec2 = mkVaultwardenEc2Host {
+          domain = servedName "vault-ec2" checkVars.domain;
+          awsRegion = environments.demo.vars.awsRegion.default;
+        };
+      };
+
       evalTestFiles = [
         ./tests/000_backend.nix
         ./tests/010_dns.nix
+        ./tests/account-guard.nix
         ./tests/020_vaultwarden_ec2.nix
         ./tests/vaultwarden-module.nix
         ./tests/vars.nix
@@ -149,8 +171,14 @@
               import ./stack/020_vaultwarden_ec2/domain.nix {
                 nivis = nivis.lib;
                 env = environments.demo;
-                nixosImage = img;
+                mkImage =
+                  {
+                    domain,
+                    awsRegion,
+                  }:
+                  img;
               };
+            inherit servedName;
             secretsRules = import ./secrets/secrets.nix;
           }
         ) evalTestFiles
@@ -169,16 +197,19 @@
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
           packages = [
-            nivis.packages.${pkgs.system}.nivis
+            nivis.packages.${pkgs.stdenv.hostPlatform.system}.nivis
             pkgs.awscli2
             pkgs.hcloud
             pkgs.age
             pkgs.jq
             pkgs.shellcheck
             pkgs.nixfmt
+            pkgs.lolcat
           ];
           shellHook = ''
-            echo "nivis-demos — run 'beans prime' and 'openspec context' to orient."
+            echo
+            echo "   Nix Meetup 2026 Amersfoort Nivis Demo" | lolcat
+            echo
           '';
         };
       });

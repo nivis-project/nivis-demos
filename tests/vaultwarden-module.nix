@@ -3,10 +3,13 @@
 {
   hosts,
   checkVars,
+  servedName,
   ...
 }:
 let
   cfg = hosts.vaultwarden-ec2.config;
+  # The EC2 deployment's own name; demos never claim the apex.
+  name = servedName "vault-ec2" checkVars.domain;
   vw = cfg.services.vaultwarden;
   dataDir = "/var/lib/vaultwarden";
   fakeToken = "fake-demo-token-not-a-real-secret-0000000000";
@@ -34,7 +37,7 @@ in
     vw.config.ROCKET_ADDRESS == "127.0.0.1"
   ) "bound to ${toString vw.config.ROCKET_ADDRESS}")
   (t "vaultwarden: caddy serves the configured domain" (
-    cfg.services.caddy.enable && cfg.services.caddy.virtualHosts ? ${checkVars.domain}
+    cfg.services.caddy.enable && cfg.services.caddy.virtualHosts ? ${name}
   ))
   (t "vaultwarden: DOMAIN is an https URL" (builtins.match "https://.*" vw.config.DOMAIN != null))
   (t "vaultwarden: signups are closed" (vw.config.SIGNUPS_ALLOWED == false))

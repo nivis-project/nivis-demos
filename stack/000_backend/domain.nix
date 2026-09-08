@@ -41,9 +41,15 @@ let
     name = "state";
     config = {
       bucket = bucket.refAttr "id";
-      versioning_configuration = {
-        status = "Enabled";
-      };
+      # A LIST-nested block in the AWS provider: a bare attrset is rejected at
+      # apply time, exactly like disk_container/user_bucket in the EC2 domain.
+      # Evaluation cannot catch this — nothing in the IR knows the provider's
+      # schema — so the assertion in tests/000_backend.nix pins the shape.
+      versioning_configuration = [
+        {
+          status = "Enabled";
+        }
+      ];
     };
   };
 
@@ -64,7 +70,12 @@ in
 toIR {
   providers.aws = mkProvider {
     source = "registry.opentofu.org/hashicorp/aws";
-    config.region = env.aws.region;
+    config = {
+      region = vars.awsRegion;
+      # Refuse to act on any account but the intended one. A wrong-account run
+      # fails at plan time, before anything is created.
+      allowed_account_ids = [ vars.awsAccountId ];
+    };
   };
 
   # This domain declares the very bucket it stores its own state in, so the
@@ -76,6 +87,8 @@ toIR {
   # Every other domain just uses the bucket, under its own key.
   backend = env.backend // {
     bucket = vars.stateBucket;
+    # Same resolved value as the provider: state cannot end up in another region.
+    region = vars.awsRegion;
     key = "000_backend/state.json";
   };
 

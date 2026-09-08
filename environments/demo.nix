@@ -16,11 +16,6 @@
 {
   name = "demo";
 
-  aws = {
-    # Safe to publish: a region is not account-specific.
-    region = "eu-central-1";
-  };
-
   # Variable DECLARATIONS. Domains resolve these per run with
   # `nivis.mkVars env.vars (ledger.vars or { })`; a declaration with no default
   # is required and fails by name when unset.
@@ -52,6 +47,32 @@
       type = "str";
     };
 
+    # The region is a variable, not a literal, for two reasons: it was
+    # previously written twice (provider and state backend) with nothing keeping
+    # them in step — create resources in one region, write state to a bucket in
+    # another — and a clone elsewhere in the world should not have to edit a
+    # tracked file to move. A default is safe here, unlike `domain` and
+    # `awsAccountId`, where guessing is the failure mode.
+    #
+    # Changing this after the state bucket exists points the backend at a
+    # different region, where your state is not: migrate deliberately.
+    awsRegion = {
+      type = "str";
+      default = "eu-central-1";
+    };
+
+    # REQUIRED — which AWS account these demos may touch.
+    #
+    # Nothing else pins this: AWS credentials are just "whatever identity is
+    # loaded", so without this guard an apply lands in whichever account you
+    # happen to be authenticated to. It is wired to the provider's
+    # `allowed_account_ids`, so a wrong-account run fails at PLAN time having
+    # created nothing. No default, because guessing here is exactly the failure
+    # mode. Supply it alongside `domain` in environments/demo.vars.json.
+    awsAccountId = {
+      type = "str";
+    };
+
     # Distinguishes this stack's globally-scoped AWS names (the vmimport role,
     # the image bucket, the AMI) so two demos can coexist in one account.
     suffix = {
@@ -75,7 +96,8 @@
   # the backend together; each domain appends its own `key`.
   backend = {
     type = "s3";
-    region = "eu-central-1";
+    # `bucket` and `region` are filled in by each domain from the resolved
+    # variables, so the provider and the state backend can never disagree.
   };
 
   tags = {

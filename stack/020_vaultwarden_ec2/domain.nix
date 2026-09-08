@@ -15,7 +15,10 @@
 {
   nivis,
   env,
-  nixosImage ? null,
+  # Builds the host image for a given served name. Absent in the checks, so no
+  # image is ever built there; a real run supplies it and the image is produced
+  # for the name this deployment actually serves.
+  mkImage ? null,
 }:
 ledger:
 let
@@ -33,10 +36,19 @@ let
 
   name = "nivis-demos-vaultwarden-${vars.suffix}";
 
+  # This deployment's own name. Demos never claim the apex.
+  servedName = "vault-ec2.${vars.domain}";
+
   # The image is a Nix BUILD OUTPUT marked with `drv`: a __build leaf the
   # executor realises before uploading. Absent (a pure IR eval in the checks), a
   # placeholder stands in so the resource shapes still evaluate without a build.
-  imageSource = if nixosImage != null then drv nixosImage else "/placeholder/nixos-amazon-image.vhd";
+  imageSource =
+    if mkImage != null then
+      drv (mkImage {
+        domain = servedName;
+      })
+    else
+      "/placeholder/nixos-amazon-image.vhd";
 
   # Who we are, so the SSM policy can be scoped to this account rather than "*".
   caller = mkData {
@@ -229,7 +241,7 @@ let
               {
                 Effect = "Allow";
                 Action = [ "ssm:GetParameter" ];
-                Resource = "arn:aws:ssm:${env.aws.region}:${toString (builtins.head resolved)}:parameter${ssmParameterName}";
+                Resource = "arn:aws:ssm:${vars.awsRegion}:${toString (builtins.head resolved)}:parameter${ssmParameterName}";
               }
             ];
           };
@@ -379,10 +391,10 @@ let
   aRecord = mkResource {
     provider = "aws";
     type = "aws_route53_record";
-    name = "apex";
+    name = "vaultwarden";
     config = {
       zone_id = zone.refAttr "zone_id";
-      name = vars.domain;
+      name = servedName;
       type = "A";
       ttl = 60;
       records = [ (eip.refAttr "public_ip") ];
@@ -392,11 +404,18 @@ in
 toIR {
   providers.aws = mkProvider {
     source = "registry.opentofu.org/hashicorp/aws";
-    config.region = env.aws.region;
+    config = {
+      region = vars.awsRegion;
+      # Refuse to act on any account but the intended one. A wrong-account run
+      # fails at plan time, before anything is created.
+      allowed_account_ids = [ vars.awsAccountId ];
+    };
   };
 
   backend = env.backend // {
     bucket = vars.stateBucket;
+    # Same resolved value as the provider: state cannot end up in another region.
+    region = vars.awsRegion;
     key = "020_vaultwarden_ec2/state.json";
   };
 
@@ -430,7 +449,7 @@ toIR {
     public_ip = eip.refAttr "public_ip";
     data_volume_id = dataVolume.refAttr "id";
     ssm_parameter_name = ssmParameterName;
-    url = "https://${vars.domain}";
+    url = "https://${servedName}";
   };
 
   inherit ledger;

@@ -27,7 +27,20 @@ let
 
   # Forcing a domain against a BARE ledger — what the executor supplies when no
   # value is given — must fail, because `domain` is required.
-  bareEval = d: (builtins.tryEval (builtins.deepSeq (domains.${d} { outputs = { }; }) true));
+  evalWith =
+    d: vars:
+    (builtins.tryEval (
+      builtins.deepSeq (domains.${d} {
+        outputs = { };
+        inherit vars;
+      }) true
+    ));
+  bareEval = d: evalWith d { };
+  # Everything a domain needs EXCEPT `domain` itself.
+  withoutDomain = {
+    stateBucket = "some-bucket";
+    awsAccountId = "123456789012";
+  };
 
   t = name: ok: { inherit name ok; };
   tWith = name: ok: detail: {
@@ -85,10 +98,14 @@ in
     # If the fixture leaked into the domain function, this would succeed.
     !(bareEval "010_dns").success
   ))
-  (t "checkVars: a domain not using `domain` still evaluates bare" (
-    # 000_backend never reads vars.domain, so a missing required variable must
-    # not poison it — variable resolution is per-variable and lazy.
-    (bareEval "000_backend").success
+  (t "checkVars: a domain not using `domain` evaluates without it" (
+    # 000_backend never reads vars.domain, so that missing required variable
+    # must not poison it — variable resolution is per-variable and lazy. It does
+    # need awsAccountId, which every AWS domain reads for the account guard.
+    (evalWith "000_backend" withoutDomain).success
+  ))
+  (t "checkVars: 010_dns still fails without `domain`, even when other vars are set" (
+    !(evalWith "010_dns" withoutDomain).success
   ))
 
   # --- 1.4 the fixture supplies ONLY required variables --------------------

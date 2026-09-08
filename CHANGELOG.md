@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The EC2 demo could not be applied. Its machine image was built with the
+  checks-only fixture name baked in, so it served `demo.invalid` and would
+  request a certificate for a name nobody owns. Images are now built for the
+  name the deployment actually serves.
+- `versioning_configuration` on the state bucket was an attrset where the AWS
+  provider requires a one-element list, so the very first `apply` failed
+  part-way through creating the bucket.
+- The AWS region was written twice — once for the provider, once for the state
+  backend — with nothing keeping them in step. One variable now feeds both.
+
+### Changed
+
+- Each demo is served at its own name under your domain (`vault-ec2.<domain>`)
+  instead of the apex, so several demos coexist and the apex stays yours.
+  **Breaking** if you already applied the EC2 demo: its record moves and a
+  certificate re-issues for the new name.
+- The AWS account is now pinned by a required `awsAccountId` variable wired to
+  the provider's `allowed_account_ids`, so an apply with credentials for another
+  account fails before creating anything. Hetzner needs no equivalent: its API
+  tokens are project-scoped.
+
 ### Added
 
 - Project scaffold: OpenSpec wired to the shared `nivis` store, beans tracker

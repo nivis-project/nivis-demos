@@ -37,11 +37,18 @@ in
 toIR {
   providers.aws = mkProvider {
     source = "registry.opentofu.org/hashicorp/aws";
-    config.region = env.aws.region;
+    config = {
+      region = vars.awsRegion;
+      # Refuse to act on any account but the intended one. A wrong-account run
+      # fails at plan time, before anything is created.
+      allowed_account_ids = [ vars.awsAccountId ];
+    };
   };
 
   backend = env.backend // {
     bucket = vars.stateBucket;
+    # Same resolved value as the provider: state cannot end up in another region.
+    region = vars.awsRegion;
     key = "010_dns/state.json";
   };
 
