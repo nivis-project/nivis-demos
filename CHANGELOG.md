@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The EC2 demo's image was never actually wired up: the domain shipped a
+  placeholder path, the builder was called with a missing argument, and the
+  image attribute did not exist in this nixpkgs. All three were invisible to the
+  checks, which probed the value's shape without evaluating it.
+- The vault's data volume was mounted at a device path that could never resolve
+  — the AWS by-id path contains the volume's own id, unknown when the image is
+  built. It is now mounted by filesystem label, prepared on first boot, so the
+  mount works on a machine the image never saw and survives replacement.
+
 - The EC2 demo could not be applied. Its machine image was built with the
   checks-only fixture name baked in, so it served `demo.invalid` and would
   request a certificate for a name nobody owns. Images are now built for the

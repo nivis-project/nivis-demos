@@ -49,20 +49,40 @@
       # `nivis <verb> --attr 'nivis.<env>."<domain>"'` (see ./stackctl). Each
       # domain carries its own state key, so state is isolated per domain.
       mkDomain =
-        env: path:
-        import path {
-          nivis = nivis.lib;
-          inherit env;
-        };
+        env: path: extra:
+        import path (
+          {
+            nivis = nivis.lib;
+            inherit env;
+          }
+          // extra
+        );
 
       # Every domain, for every environment: nivis.<env>."<domain>".
+      #
+      # THIS is what `stackctl` applies, so it must carry the real image builder.
+      # An earlier version omitted it "so the checks never build an image", which
+      # left no path by which a real apply ever got one — the placeholder went to
+      # S3 and the apply failed on a file that does not exist. The checks get a
+      # separate construction below instead.
       domainsFor = env: {
-        "000_backend" = mkDomain env ./stack/000_backend/domain.nix;
-        "010_dns" = mkDomain env ./stack/010_dns/domain.nix;
-        # `mkImage` is deliberately NOT passed here: the checks must never build
-        # an image. A real apply passes mkVaultwardenEc2Image (see the README).
-        "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix;
+        "000_backend" = mkDomain env ./stack/000_backend/domain.nix { };
+        "010_dns" = mkDomain env ./stack/010_dns/domain.nix { };
+        "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix {
+          mkImage = mkVaultwardenEc2Image;
+        };
       };
+
+      # The same domains as the checks see them: no image builder, so evaluating
+      # them can never force a build. Nothing outside the checks uses these.
+      checkDomainsFor =
+        env:
+        domainsFor env
+        // {
+          "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix {
+            mkImage = _: null;
+          };
+        };
 
       systems = [
         "x86_64-linux"
@@ -95,7 +115,7 @@
         outputs = { };
         vars = checkVars;
       };
-      irsFor = env: builtins.mapAttrs (_: domain: domain checkLedger) (domainsFor env);
+      irsFor = env: builtins.mapAttrs (_: domain: domain checkLedger) (checkDomainsFor env);
 
       # tests/*.nix are evaluation tests: each is `{ nivis, irs, envs } -> [ { name, ok, ... } ]`.
       # They must be pure (no credentials, no network, no provider process), so
@@ -126,7 +146,7 @@
           domain,
           awsRegion,
         }:
-        (mkVaultwardenEc2Host { inherit domain awsRegion; }).config.system.build.amazonImage;
+        (mkVaultwardenEc2Host { inherit domain awsRegion; }).config.system.build.images.amazon;
 
       # Each workload's own name under the environment's domain. Demos never
       # claim the apex — that name belongs to the operator, not to an example.
@@ -159,7 +179,10 @@
             irs = irsFor environments.demo;
             # The raw `ledger -> IR` functions, so a test can evaluate a domain
             # against an injected ledger (e.g. overridden vars).
-            domains = domainsFor environments.demo;
+            domains = checkDomainsFor environments.demo;
+            # The domain as `stackctl` actually applies it — with the real image
+            # builder — so a test can prove it does not ship the placeholder.
+            realDomains = domainsFor environments.demo;
             inherit checkVars;
             envs = environments;
             hosts = nixosHosts;
@@ -193,6 +216,18 @@
       nivis = builtins.mapAttrs (_: env: domainsFor env) environments;
 
       nixosConfigurations = nixosHosts;
+
+      # Exposed so the image can be built BEFORE an apply.
+      #
+      # nivis realises a __build leaf with `nix-store --realise <outputPath>`
+      # (internal/phase/evaluator.go), which can substitute a path or use one
+      # that already exists, but cannot BUILD it — that needs the .drv. A
+      # locally-built image is in no cache, so the first apply fails with
+      # "no substituter that can build it". Pre-building puts the path in the
+      # store, after which the realise is a no-op.
+      lib = {
+        inherit mkVaultwardenEc2Image servedName;
+      };
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {

@@ -18,7 +18,12 @@
   # Builds the host image for a given served name. Absent in the checks, so no
   # image is ever built there; a real run supplies it and the image is produced
   # for the name this deployment actually serves.
-  mkImage ? null,
+  # Builds the host image for a served name, or returns null to stand one in.
+  # REQUIRED — deliberately no default. An earlier version defaulted to null,
+  # `domainsFor` forgot to pass a builder, and a real apply uploaded a
+  # placeholder path that does not exist. Omitting it is now an evaluation
+  # error. The checks pass `_: null` and evaluate no image at all.
+  mkImage,
 }:
 ledger:
 let
@@ -42,13 +47,14 @@ let
   # The image is a Nix BUILD OUTPUT marked with `drv`: a __build leaf the
   # executor realises before uploading. Absent (a pure IR eval in the checks), a
   # placeholder stands in so the resource shapes still evaluate without a build.
-  imageSource =
-    if mkImage != null then
-      drv (mkImage {
-        domain = servedName;
-      })
-    else
-      "/placeholder/nixos-amazon-image.vhd";
+  # Every value the builder needs comes from resolved variables. Both keys are
+  # required by the builder; passing one was a latent error that laziness hid
+  # until apply.
+  image = mkImage {
+    domain = servedName;
+    awsRegion = vars.awsRegion;
+  };
+  imageSource = if image != null then drv image else "/placeholder/nixos-amazon-image.vhd";
 
   # Who we are, so the SSM policy can be scoped to this account rather than "*".
   caller = mkData {

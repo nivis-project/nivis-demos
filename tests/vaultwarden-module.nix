@@ -25,6 +25,25 @@ in
   (tWith "vaultwarden: data directory is the mounted volume" (
     vw.config.DATA_FOLDER == dataDir && cfg.fileSystems ? ${dataDir}
   ) "DATA_FOLDER is ${toString vw.config.DATA_FOLDER}")
+  # The by-id path this replaced was invented: on Nitro it embeds the EBS volume
+  # id, which does not exist when the image is built, so the mount could never
+  # have found it. A label is resolvable at boot and survives replacement.
+  (t "vaultwarden: the data volume is mounted by label, not a guessed path" (
+    builtins.match "/dev/disk/by-label/.*" cfg.fileSystems."/var/lib/vaultwarden".device != null
+  ))
+  (t "vaultwarden: the mount cannot run before the volume is prepared" (
+    builtins.elem "x-systemd.requires=vaultwarden-data-prepare.service"
+      cfg.fileSystems."/var/lib/vaultwarden".options
+  ))
+  (t "vaultwarden: the prepare unit only formats a device with no signature" (
+    # `blkid <dev>` succeeds on ANY existing signature, so the negated form is
+    # what keeps a populated vault from being reformatted.
+    builtins.match ".*! blkid .*" cfg.systemd.services.vaultwarden-data-prepare.script != null
+  ))
+  (t "vaultwarden: the prepare unit is a no-op once the label exists" (
+    builtins.match ".*blkid -L vaultwarden.*" cfg.systemd.services.vaultwarden-data-prepare.script
+    != null
+  ))
   (t "vaultwarden: the data device is not the root disk" (
     cfg.fileSystems.${dataDir}.device != cfg.fileSystems."/".device
   ))

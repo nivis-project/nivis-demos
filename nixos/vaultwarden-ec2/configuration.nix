@@ -21,9 +21,11 @@ let
   # unit file — a path, written at boot by the fetch unit below.
   adminTokenPath = "/run/vaultwarden/admin-token.env";
 
-  # The data volume as attached by the domain. Nitro instances rename block
-  # devices, so this is the stable by-id path rather than the requested name.
-  dataDevice = "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol_data";
+  # By label, not by path. The by-id path on Nitro embeds the EBS volume id,
+  # which does not exist when this image is built; the prepare unit below puts
+  # the label on the volume at first boot.
+  dataLabel = "vaultwarden";
+  dataDevice = "/dev/disk/by-label/${dataLabel}";
 in
 {
   imports = [
@@ -65,6 +67,50 @@ in
       umask 077
       printf 'ADMIN_TOKEN=%s\n' "$token" > ${adminTokenPath}
       chmod 0400 ${adminTokenPath}
+    '';
+  };
+
+  # --- first boot: give the data volume its label ------------------------
+  # Finds the attached-but-blank block device and formats it. Idempotent: if a
+  # filesystem with the label already exists (every boot after the first, and
+  # after an instance replacement re-attaches the volume) it does nothing.
+  #
+  # It only ever formats a device with NO filesystem or partition signature at
+  # all, so a volume holding a vault can never be wiped by it.
+  systemd.services.vaultwarden-data-prepare = {
+    description = "Label the Vaultwarden data volume on first boot";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    path = [
+      pkgs.util-linux
+      pkgs.e2fsprogs
+      pkgs.coreutils
+    ];
+    script = ''
+      set -euo pipefail
+
+      if blkid -L ${dataLabel} >/dev/null 2>&1; then
+        echo "data volume already labelled ${dataLabel}; nothing to do"
+        exit 0
+      fi
+
+      root_src=$(findmnt -no SOURCE / || true)
+      for dev in /dev/nvme1n1 /dev/nvme2n1 /dev/xvdf /dev/sdf; do
+        [ -b "$dev" ] || continue
+        [ "$dev" = "$root_src" ] && continue
+        # blkid succeeds if ANY signature is present; only a truly blank device
+        # gets formatted.
+        if ! blkid "$dev" >/dev/null 2>&1; then
+          echo "formatting blank data volume $dev as ${dataLabel}"
+          mkfs.ext4 -L ${dataLabel} "$dev"
+          exit 0
+        fi
+      done
+
+      echo "no blank data device found, and no volume labelled ${dataLabel}" >&2
+      exit 1
     '';
   };
 

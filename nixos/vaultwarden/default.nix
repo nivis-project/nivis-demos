@@ -23,11 +23,22 @@ in
   # --- the vault lives on its own volume ---------------------------------
   # The machine is cattle: replacing it must not lose the vault. The data
   # directory IS the mount point, so nothing is written to the root disk.
+  # Mounted by LABEL, not by device path. A cloud that renames block devices
+  # (AWS Nitro) or assigns an id only after the volume exists makes any baked-in
+  # device path a guess — and a wrong one fails at boot, long after the apply
+  # reported success. The label is stable across instance replacement, which is
+  # the whole reason this volume is separate.
+  #
+  # The platform is responsible for a device carrying this label existing; each
+  # host does that in its own first-boot unit, and declares it here with
+  # x-systemd.requires so the mount cannot run before it.
   fileSystems.${dataDir} = {
     device = dataDevice;
     fsType = "ext4";
-    autoFormat = true; # first boot on a blank volume
-    options = [ "nofail" ];
+    options = [
+      "x-systemd.requires=vaultwarden-data-prepare.service"
+      "x-systemd.device-timeout=30s"
+    ];
   };
 
   services.vaultwarden = {

@@ -6,6 +6,7 @@
   irs,
   envs,
   withImage,
+  realDomains,
   checkVars,
   servedName,
   hosts,
@@ -82,6 +83,36 @@ in
   (tWith "ec2: evaluates with no image, using a placeholder" (
     (byId "aws.aws_s3_object.image").config.source == "/placeholder/nixos-amazon-image.vhd"
   ) "got ${toString (byId "aws.aws_s3_object.image").config.source}")
+
+  # --- the domain stackctl ACTUALLY applies must not ship the placeholder ---
+  # The previous version passed no image builder in `domainsFor`, so a real
+  # apply uploaded "/placeholder/nixos-amazon-image.vhd" and failed on a file
+  # that does not exist. The checks could not see it: they are the no-image
+  # path by construction. This asserts on the real one — evaluating the image
+  # derivation, which is cheap; only realising it would be a build.
+  (tWith "ec2: the applied domain builds a real image, not the placeholder" (
+    let
+      realIr = realDomains."020_vaultwarden_ec2" {
+        outputs = { };
+        vars = {
+          domain = checkVars.domain;
+          awsAccountId = checkVars.awsAccountId;
+          stateBucket = "check-bucket";
+        };
+      };
+      src =
+        (builtins.head (builtins.filter (r: r.id == "aws.aws_s3_object.image") realIr.resources))
+        .config.source;
+    in
+    # FORCE it. Probing the shape only (`src ? __build`) is what let three
+    # separate errors through: a missing `awsRegion` argument, a nonexistent
+    # `amazonImage` attribute, and a builder that was never passed at all. Nix
+    # never evaluated the call, so the shape check happily passed while a real
+    # apply would fail. deepSeq is the difference between "looks right" and
+    # "is right"; the boolean keeps the store path out of this derivation, so
+    # nothing here builds the image.
+    builtins.deepSeq src (builtins.isAttrs src && src ? __build && builtins.isString src.__build.path)
+  ) "the domain nivis applies does not produce a real image")
 
   # --- 3.3 with an image, the source is a __build leaf --------------------
   (t "ec2: a supplied image becomes a __build leaf" (
