@@ -66,8 +66,7 @@ echo '{ "stateBucket": "my-nivis-demos-state" }' > environments/demo.vars.json
 ## Bootstrap: the state bucket
 
 `stack/000_backend` creates the very bucket it declares as its own backend — a
-chicken-and-egg problem nivis solves in three commands (requires **nivis
->= 0.5.0**; see nivis's `docs/REMOTE-STATE.md`):
+chicken-and-egg problem nivis solves in three commands (requires **nivis >= 0.6.0**; see nivis's `docs/REMOTE-STATE.md`):
 
 ```sh
 # 1. Apply with local state, creating the bucket. The declared backend is

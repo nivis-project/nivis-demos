@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires nivis >= 0.6.0. Building a machine image during an apply needs the
+  `__build` fix from that release: before it, nivis could only substitute a
+  prebuilt path, so a locally-built image failed with "no substituter that can
+  build it".
+
 - Each demo is served at its own name under your domain (`vault-ec2.<domain>`)
   instead of the apex, so several demos coexist and the apex stays yours.
   **Breaking** if you already applied the EC2 demo: its record moves and a

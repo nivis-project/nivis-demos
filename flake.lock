@@ -71,11 +71,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1788804221,
-        "narHash": "sha256-7nWqEYtAVi9I/USX1nqz4NMNXYsxHCIamRUg6fFCH6c=",
+        "lastModified": 1788874009,
+        "narHash": "sha256-NqJsTo83SkhWlHug5sxnqXeuiwG1d7pUTQXr/e6UxlY=",
         "owner": "nivis-project",
         "repo": "nivis",
-        "rev": "68053e590d1fad9dea3e78002cd725e7c7082396",
+        "rev": "6ad2c8fdb583ff4b528d14b1808fb72eb9f9c058",
         "type": "github"
       },
       "original": {
