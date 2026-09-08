@@ -45,6 +45,26 @@
         "type": "github"
       }
     },
+    "hcloudimage": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783970346,
+        "narHash": "sha256-l3EMPVUujTn2jOc60MpY11IUsftgaUI6w2T8cnRL2iM=",
+        "owner": "nivis-project",
+        "repo": "terraform-provider-hcloudimage",
+        "rev": "40dc1a9c7ae00df42d3b8f32b5e27683820b9d06",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nivis-project",
+        "repo": "terraform-provider-hcloudimage",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -117,6 +137,7 @@
     "root": {
       "inputs": {
         "agenix": "agenix",
+        "hcloudimage": "hcloudimage",
         "nivis": "nivis",
         "nixpkgs": "nixpkgs_2"
       }

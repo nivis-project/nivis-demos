@@ -46,6 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Vaultwarden on Hetzner (`stack/030_vaultwarden_hetzner`): the same workload as
+  the EC2 demo, importing `nixos/vaultwarden` unchanged. A NixOS image built by
+  this repo is uploaded and snapshotted by our own hcloudimage provider, and the
+  server boots straight from it. Mixed-cloud in one apply: Hetzner server,
+  volume and address, with the DNS record in AWS Route 53 fed by the address
+  Hetzner allocates.
+- The admin token on Hetzner uses agenix, with the server enrolled as a
+  recipient after its first boot — a documented two-step, during which
+  Vaultwarden stays down rather than serving an unauthenticated admin page.
+
 - Project scaffold: OpenSpec wired to the shared `nivis` store, beans tracker
   with milestones for the mixed-cloud foundation and the Vaultwarden and
   Minecraft demos, and a gated `scripts/ship-change.sh`.

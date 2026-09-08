@@ -89,6 +89,34 @@
       type = "int";
       default = 8;
     };
+
+    # --- Hetzner ---------------------------------------------------------
+    # A Hetzner API token is scoped to one project by construction, so unlike
+    # AWS there is no account to pin: whichever token you export IS the guard.
+    hcloudLocation = {
+      type = "str";
+      default = "fsn1";
+    };
+
+    # x86, deliberately diverging from the infra repo's ARM. The image then
+    # builds natively on any x86_64 machine, instead of needing binfmt
+    # emulation or a remote builder just to try the demo.
+    hcloudServerType = {
+      type = "str";
+      default = "cx22";
+    };
+
+    # Primary IPs are datacenter-scoped, not location-scoped, so this is a
+    # separate value from hcloudLocation and must sit inside it.
+    hcloudDatacenter = {
+      type = "str";
+      default = "fsn1-dc14";
+    };
+
+    hetznerVolumeSizeGb = {
+      type = "int";
+      default = 10; # Hetzner's minimum volume size
+    };
   };
 
   # Remote state (the catstack .tfbackend role). The bucket comes from the

@@ -61,6 +61,12 @@ aws ssm put-parameter --name <ssm_parameter_name> --type SecureString --value ..
 ./stackctl demo 020_vaultwarden_ec2 apply    # image -> AMI -> instance -> A record
 ./stackctl demo 020_vaultwarden_ec2 destroy
 
+# Vaultwarden on Hetzner (needs HCLOUD_TOKEN; token is project-scoped)
+./stackctl demo 030_vaultwarden_hetzner apply    # image -> snapshot -> server
+# Two-step secret enrolment: apply, read the host key from the Hetzner console,
+# add it to secrets/secrets.nix, agenix -r, apply again. Vaultwarden does not
+# start until step two. See README.
+
 # Configuration variables — account-specific values, never edited into a
 # tracked file. Precedence: NIVIS_VAR_* < --var-file < --var
 echo '{ "stateBucket": "..." }' > environments/demo.vars.json   # gitignored

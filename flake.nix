@@ -15,9 +15,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Added when the first domain that references them lands:
-    #   hcloudimage.url = "github:nivis-project/terraform-provider-hcloudimage";
-    #   nixos-generators.url = "github:nix-community/nixos-generators";
+    # Our own provider: uploads a disk image into a Hetzner project and turns it
+    # into a snapshot, so a Hetzner server boots an image this repo built.
+    # Consumed as a Nix store path — no registry round-trip.
+    hcloudimage = {
+      url = "github:nivis-project/terraform-provider-hcloudimage";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -26,6 +30,7 @@
       nixpkgs,
       nivis,
       agenix,
+      hcloudimage,
     }:
     let
       # The gate `/mip:ship` enforces, and the single source of truth for it.
@@ -71,6 +76,10 @@
         "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix {
           mkImage = mkVaultwardenEc2Image;
         };
+        "030_vaultwarden_hetzner" = mkDomain env ./stack/030_vaultwarden_hetzner/domain.nix {
+          mkImage = mkVaultwardenHetznerImage;
+          inherit hcloudimageBin;
+        };
       };
 
       # The same domains as the checks see them: no image builder, so evaluating
@@ -81,6 +90,12 @@
         // {
           "020_vaultwarden_ec2" = mkDomain env ./stack/020_vaultwarden_ec2/domain.nix {
             mkImage = _: null;
+          };
+          # A null builder here is what keeps the gate free of the eval-time
+          # image build that hcloudimage's required image_sha256 would force.
+          "030_vaultwarden_hetzner" = mkDomain env ./stack/030_vaultwarden_hetzner/domain.nix {
+            mkImage = _: null;
+            inherit hcloudimageBin;
           };
         };
 
@@ -148,6 +163,25 @@
         }:
         (mkVaultwardenEc2Host { inherit domain awsRegion; }).config.system.build.images.amazon;
 
+      mkVaultwardenHetznerHost =
+        { domain }:
+        nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            agenix.nixosModules.default
+            (import ./nixos/vaultwarden-hetzner/configuration.nix { inherit domain; })
+          ];
+        };
+
+      # raw-efi: a bootable UEFI disk image, which is what hcloudimage uploads
+      # and snapshots. Same shape as the infra repo, but straight from nixpkgs.
+      mkVaultwardenHetznerImage =
+        { domain }: (mkVaultwardenHetznerHost { inherit domain; }).config.system.build.images.raw-efi;
+
+      # The hcloudimage provider as a store path: nivis resolves a filesystem
+      # path as the provider binary itself, so there is no registry round-trip.
+      hcloudimageBin = "${hcloudimage.packages.x86_64-linux.default}/bin/terraform-provider-hcloudimage";
+
       # Each workload's own name under the environment's domain. Demos never
       # claim the apex — that name belongs to the operator, not to an example.
       servedName = label: domain: "${label}.${domain}";
@@ -160,6 +194,9 @@
           domain = servedName "vault-ec2" checkVars.domain;
           awsRegion = environments.demo.vars.awsRegion.default;
         };
+        vaultwarden-hetzner = mkVaultwardenHetznerHost {
+          domain = servedName "vault-hetzner" checkVars.domain;
+        };
       };
 
       evalTestFiles = [
@@ -167,6 +204,7 @@
         ./tests/010_dns.nix
         ./tests/account-guard.nix
         ./tests/020_vaultwarden_ec2.nix
+        ./tests/030_vaultwarden_hetzner.nix
         ./tests/vaultwarden-module.nix
         ./tests/vars.nix
         ./tests/secrets.nix
@@ -184,6 +222,27 @@
             # builder — so a test can prove it does not ship the placeholder.
             realDomains = domainsFor environments.demo;
             inherit checkVars;
+            # A one-byte stand-in for the disk image. It exercises the real
+            # code path — `drv` and the hashFile the provider forces — without
+            # building a multi-GB NixOS image inside the gate.
+            hetznerWithImage =
+              tag:
+              import ./stack/030_vaultwarden_hetzner/domain.nix {
+                nivis = nivis.lib;
+                env = environments.demo;
+                hcloudimageBin = "/nix/store/stub/bin/terraform-provider-hcloudimage";
+                mkImage =
+                  _:
+                  (nixpkgs.legacyPackages.x86_64-linux.runCommand "fake-disk-image-${tag}" { } ''
+                    mkdir -p $out
+                    echo ${tag} > $out/nixos.img
+                  '').overrideAttrs
+                    (o: {
+                      passthru = (o.passthru or { }) // {
+                        filePath = "nixos.img";
+                      };
+                    });
+              };
             envs = environments;
             hosts = nixosHosts;
             # A domain evaluated WITH an image, so a test can prove the image

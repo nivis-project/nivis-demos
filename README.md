@@ -18,6 +18,7 @@ fake.** That is the design, not an unfinished TODO — see
 | `stack/000_backend/`        | the state bucket, self-managed (bootstrap first)           |
 | `stack/010_dns/`            | the Route 53 hosted zone for your domain                    |
 | `stack/020_vaultwarden_ec2/`| Vaultwarden on EC2, built from a NixOS image                |
+| `stack/030_vaultwarden_hetzner/` | the same workload on Hetzner compute                  |
 | `nixos/vaultwarden/`        | the workload module — cloud-agnostic, reused by both demos  |
 | `secrets/`                  | age-encrypted secrets + `secrets.nix` recipient rules       |
 | `nixos/demo-host/`          | a host that proves the agenix wiring; evaluated, never deployed |
@@ -251,6 +252,59 @@ instance**. The data volume, the Elastic IP and the A record are separate
 resources and are not replaced, so the vault and the address survive. That is
 the lesson worth taking from this demo: the machine is disposable, the data is
 not.
+
+## Vaultwarden on Hetzner
+
+The same workload, on a second cloud. `nixos/vaultwarden` is imported
+**unchanged**; only the domain differs. That is the demo: the workload is
+portable, the infrastructure is not.
+
+It is also mixed-cloud in a single apply — the server, its volume and its
+address are Hetzner, while the DNS record is AWS Route 53, fed by the address
+Hetzner allocates.
+
+Needs `HCLOUD_TOKEN` for the project you want to deploy into. A Hetzner API
+token is scoped to one project by construction, so unlike AWS there is no
+account to pin: whichever token you export *is* the guard.
+
+### The two-step secret enrolment
+
+Unlike EC2, there is no SSM. The admin token is delivered by **agenix** — but a
+server generates its ssh host key at first boot, so it cannot be a recipient
+when the secret is encrypted. Enrolment therefore takes two passes, and
+**Vaultwarden does not start until the second one completes**. That is
+deliberate: a missing token disables the admin interface rather than serving it
+unauthenticated.
+
+```sh
+# 1. first apply — builds the image, uploads it, snapshots it, boots the server
+./stackctl demo 030_vaultwarden_hetzner apply
+
+# 2. read the server's ssh host public key from the Hetzner Cloud console
+#    (Console -> the server -> "Console"), then log in and:
+#      cat /etc/ssh/ssh_host_ed25519_key.pub
+
+# 3. add that key as a recipient in secrets/secrets.nix, and re-encrypt
+agenix -r
+
+# 4. apply again — a new image carries the re-keyed secret, the server is
+#    replaced, and Vaultwarden starts
+./stackctl demo 030_vaultwarden_hetzner apply
+```
+
+Step 2 goes through the web console because the firewall exposes only 80 and
+443 — there is no ssh route in from outside. That is a real rough edge of this
+demo, not a polished flow.
+
+The volume and the primary IP survive the replacement in step 4, so the vault
+and the address are unaffected.
+
+### Costs
+
+A server, a volume and a primary IP bill by the hour.
+`./stackctl demo 030_vaultwarden_hetzner destroy` when you are done. The image
+is x86 (`cx22`) so it builds natively on any x86_64 machine; no emulation and no
+remote builder needed.
 
 ## Working on a domain
 
