@@ -11,6 +11,8 @@
   servedName,
   hosts,
   hetznerWithImage,
+  hcloudimageBin,
+  devShellPackagePaths,
   ...
 }:
 let
@@ -175,6 +177,17 @@ in
   (t "hetzner: state key is <domain>/state.json" (
     ir.backend.key == "030_vaultwarden_hetzner/state.json"
   ))
+
+  # --- the provider binary must actually exist at apply time ---------------
+  # nivis execs the provider by path. The IR carries that path as a plain
+  # string, so nothing realises it: if the package was never built, the apply
+  # dies with ENOENT on a path that looks perfectly valid. Keeping it in the
+  # devShell is what guarantees `nix develop -c ./stackctl ...` has it, and this
+  # asserts the two have not drifted apart.
+  (tWith "hetzner: the provider binary comes from a package in the devShell" (builtins.any
+    (pkgPath: builtins.substring 0 (builtins.stringLength pkgPath) hcloudimageBin == pkgPath)
+    devShellPackagePaths
+  ) "the provider path ${hcloudimageBin} is under no devShell package, so nothing builds it")
 
   # --- the reuse claim, checked --------------------------------------------
   # demos-vaultwarden says a second cloud reuses the module unchanged. Both

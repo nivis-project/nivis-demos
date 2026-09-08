@@ -180,7 +180,29 @@
 
       # The hcloudimage provider as a store path: nivis resolves a filesystem
       # path as the provider binary itself, so there is no registry round-trip.
-      hcloudimageBin = "${hcloudimage.packages.x86_64-linux.default}/bin/terraform-provider-hcloudimage";
+      #
+      # The IR carries this as a plain string, so nothing realises it — nivis
+      # execs the path and gets ENOENT if the package was never built. It is
+      # therefore in the devShell below, which is what makes
+      # `nix develop -c ./stackctl ...` guarantee it exists. Same shape of
+      # problem as an unrealised __build leaf, one layer up.
+      hcloudimagePkg = hcloudimage.packages.x86_64-linux.default;
+
+      # The dev shell's contents, as one list so the provider cannot be in the
+      # shell for some purposes and absent for others. A test asserts the
+      # provider binary the Hetzner domain execs lives under one of these.
+      devShellPackagesFor = pkgs: [
+        nivis.packages.${pkgs.stdenv.hostPlatform.system}.nivis
+        hcloudimagePkg
+        pkgs.awscli2
+        pkgs.hcloud
+        pkgs.age
+        pkgs.jq
+        pkgs.shellcheck
+        pkgs.nixfmt
+        pkgs.lolcat
+      ];
+      hcloudimageBin = "${hcloudimagePkg}/bin/terraform-provider-hcloudimage";
 
       # Each workload's own name under the environment's domain. Demos never
       # claim the apex — that name belongs to the operator, not to an example.
@@ -221,7 +243,8 @@
             # The domain as `stackctl` actually applies it — with the real image
             # builder — so a test can prove it does not ship the placeholder.
             realDomains = domainsFor environments.demo;
-            inherit checkVars;
+            inherit checkVars hcloudimageBin;
+            devShellPackagePaths = map toString (devShellPackagesFor nixpkgs.legacyPackages.x86_64-linux);
             # A one-byte stand-in for the disk image. It exercises the real
             # code path — `drv` and the hashFile the provider forces — without
             # building a multi-GB NixOS image inside the gate.
@@ -290,16 +313,7 @@
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
-          packages = [
-            nivis.packages.${pkgs.stdenv.hostPlatform.system}.nivis
-            pkgs.awscli2
-            pkgs.hcloud
-            pkgs.age
-            pkgs.jq
-            pkgs.shellcheck
-            pkgs.nixfmt
-            pkgs.lolcat
-          ];
+          packages = devShellPackagesFor pkgs;
           shellHook = ''
             echo
             echo "   Nix Meetup 2026 Amersfoort Nivis Demo" | lolcat

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Hetzner demo failed on its first apply because the hcloudimage provider
+  binary had never been built: nivis execs a provider by path, and nothing
+  realised it. The provider is now part of the dev shell, so
+  `nix develop -c ./stackctl …` guarantees it exists.
+
 - The EC2 demo's image was never actually wired up: the domain shipped a
   placeholder path, the builder was called with a missing argument, and the
   image attribute did not exist in this nixpkgs. All three were invisible to the
