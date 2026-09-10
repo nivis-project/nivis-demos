@@ -103,7 +103,12 @@ let
   };
 
   # 443 serves the application; 80 exists only for the ACME challenge and the
-  # redirect. Nothing else is reachable — ssh included.
+  # redirect. 22 is open because the agenix enrolment needs the server's ssh
+  # host key, and reading it is the one thing that cannot be done without
+  # reaching the host: there is no console login (root is locked, no keys, no
+  # users) and Hetzner has no SSM equivalent. `ssh-keyscan` takes the PUBLIC
+  # host key from the protocol banner before authentication, so nothing here
+  # grants a login — sshd on this host accepts none.
   firewall = mkResource {
     provider = "hcloud";
     type = "hcloud_firewall";
@@ -120,6 +125,16 @@ let
             "::/0"
           ];
           description = "HTTPS";
+        }
+        {
+          direction = "in";
+          protocol = "tcp";
+          port = "22";
+          source_ips = [
+            "0.0.0.0/0"
+            "::/0"
+          ];
+          description = "ssh — host-key enrolment via ssh-keyscan; no login is possible";
         }
         {
           direction = "in";

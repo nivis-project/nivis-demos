@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The documented way to read the server's ssh host key could not be performed:
+  it said to log in at the Hetzner console, but the host has no root password,
+  no authorized keys and no other user, so the console reports the root account
+  as locked. The domain now opens tcp/22 and the README uses `ssh-keyscan`,
+  which reads the public host key from the protocol banner without
+  authenticating. Nothing can log in over that port.
+
 - The Hetzner server never booted. The image was built as `raw-efi`, but
   Hetzner's x86 line boots legacy BIOS — only the ARM `cax*` line is UEFI — so
   SeaBIOS found no MBR bootloader and stopped at "Booting from Hard Disk". The

@@ -280,9 +280,9 @@ unauthenticated.
 # 1. first apply — builds the image, uploads it, snapshots it, boots the server
 ./stackctl demo 030_vaultwarden_hetzner apply
 
-# 2. read the server's ssh host public key from the Hetzner Cloud console
-#    (Console -> the server -> "Console"), then log in and:
-#      cat /etc/ssh/ssh_host_ed25519_key.pub
+# 2. read the server's ssh host public key, straight off the wire
+ssh-keyscan -t ed25519 "$(./stackctl demo 030_vaultwarden_hetzner output | \
+  grep public_ip | cut -d= -f2 | tr -d ' \"')"
 
 # 3. add that key as a recipient in secrets/secrets.nix, and re-encrypt
 agenix -r
@@ -292,9 +292,10 @@ agenix -r
 ./stackctl demo 030_vaultwarden_hetzner apply
 ```
 
-Step 2 goes through the web console because the firewall exposes only 80 and
-443 — there is no ssh route in from outside. That is a real rough edge of this
-demo, not a polished flow.
+Step 2 needs no login, and there is none to be had: root is locked, no keys are
+installed and no other user exists. `ssh-keyscan` reads the *public* host key
+out of the ssh protocol banner before authentication happens, which is why the
+domain opens 22 alongside 80 and 443. Nothing can log in over it.
 
 The volume and the primary IP survive the replacement in step 4, so the vault
 and the address are unaffected.
