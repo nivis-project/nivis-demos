@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Hetzner demo's server could not be encoded against the provider schema.
+  hcloud reports most resource ids as strings while consuming them as numbers,
+  and hcloudimage types its snapshot id as an int64 where `hcloud_server.image`
+  wants a string, so four references crossed a type boundary. They are now
+  bridged explicitly with `str` and a local `num`.
+
 - The Hetzner demo could not create a primary IP or a server: Hetzner removed
   datacenter pinning from the API on 2026-07-01 and the provider deprecated
   `datacenter` in v1.67.0, so the value was accepted by the schema and then

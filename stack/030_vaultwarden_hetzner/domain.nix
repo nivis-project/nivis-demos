@@ -30,9 +30,29 @@ let
     toIR
     mkVars
     drv
+    str
+    derived
     ;
 
   vars = mkVars env.vars (ledger.vars or { });
+
+  # hcloud is inconsistent about id types, and nivis encodes against the real
+  # schema, so every crossing has to be spelled out. The provider reports most
+  # resource ids as strings (the Terraform convention) while consuming them as
+  # numbers: hcloud_firewall.id is a string, hcloud_server.firewall_ids is a
+  # set of numbers. `num` bridges one such crossing once the ledger has the id.
+  # (hcloud_primary_ip.id is already a number, so it needs no bridge.)
+  num =
+    r:
+    derived {
+      inputs = [ r ];
+      render =
+        vals:
+        let
+          v = builtins.head vals;
+        in
+        if builtins.isString v then builtins.fromJSON v else v;
+    };
 
   name = "nivis-demos-vaultwarden-${vars.suffix}";
   servedName = "vault-hetzner.${vars.domain}";
@@ -139,8 +159,11 @@ let
       location = vars.hcloudLocation;
       # Our snapshot, via our own provider — the round trip that makes the
       # machine a derivation rather than an image somebody uploaded once.
-      image = osImage.refAttr "id";
-      firewall_ids = [ (firewall.refAttr "id") ];
+      # hcloudimage types the snapshot id as an int64 (it is one), while
+      # hcloud_server.image is a string that happens to accept a numeric id.
+      # `str` bridges the two: it renders the resolved id once the ledger has it.
+      image = str [ (osImage.refAttr "id") ];
+      firewall_ids = [ (num (firewall.refAttr "id")) ];
       public_net = [
         {
           ipv4_enabled = true;
@@ -160,8 +183,8 @@ let
     type = "hcloud_volume_attachment";
     name = "data";
     config = {
-      volume_id = volume.refAttr "id";
-      server_id = server.refAttr "id";
+      volume_id = num (volume.refAttr "id");
+      server_id = num (server.refAttr "id");
       automount = false; # the host mounts by label
     };
   };
