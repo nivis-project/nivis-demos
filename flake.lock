@@ -91,11 +91,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1788874009,
-        "narHash": "sha256-NqJsTo83SkhWlHug5sxnqXeuiwG1d7pUTQXr/e6UxlY=",
+        "lastModified": 1788879603,
+        "narHash": "sha256-T3xY8Utj7RSQ/VrCWbmyCw0iFiYfsMVrTwgCnPXy/Pw=",
         "owner": "nivis-project",
         "repo": "nivis",
-        "rev": "6ad2c8fdb583ff4b528d14b1808fb72eb9f9c058",
+        "rev": "757e259902f60569178c9414563fc031c4f3509b",
         "type": "github"
       },
       "original": {

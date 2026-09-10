@@ -34,7 +34,6 @@ let
     toIR
     mkVars
     drv
-    derived
     ;
 
   vars = mkVars env.vars (ledger.vars or { });
@@ -55,14 +54,6 @@ let
     awsRegion = vars.awsRegion;
   };
   imageSource = if image != null then drv image else "/placeholder/nixos-amazon-image.vhd";
-
-  # Who we are, so the SSM policy can be scoped to this account rather than "*".
-  caller = mkData {
-    provider = "aws";
-    type = "aws_caller_identity";
-    name = "current";
-    config = { };
-  };
 
   ssmParameterName = "/nivis-demos/${env.name}/vaultwarden/admin-token";
 
@@ -234,23 +225,20 @@ let
     name = "ssm_read";
     config = {
       name = "${name}-ssm-read";
-      # `derived` because the account id is only known after the data source is
-      # read: the policy document is COMPUTED from a resolved value, and nivis
-      # re-evaluates it in-apply once that value exists.
-      policy = derived {
-        inputs = [ (caller.refAttr "account_id") ];
-        render =
-          resolved:
-          builtins.toJSON {
-            Version = "2012-10-17";
-            Statement = [
-              {
-                Effect = "Allow";
-                Action = [ "ssm:GetParameter" ];
-                Resource = "arn:aws:ssm:${vars.awsRegion}:${toString (builtins.head resolved)}:parameter${ssmParameterName}";
-              }
-            ];
-          };
+      # A plain string, not a `derived` leaf. The account id is already a
+      # required variable (the guard on every provider), so there is nothing to
+      # discover at run time — and a derived value is treated as unknown while
+      # planning, which made this policy report an update on every plan even
+      # though the applied document was correct.
+      policy = builtins.toJSON {
+        Version = "2012-10-17";
+        Statement = [
+          {
+            Effect = "Allow";
+            Action = [ "ssm:GetParameter" ];
+            Resource = "arn:aws:ssm:${vars.awsRegion}:${vars.awsAccountId}:parameter${ssmParameterName}";
+          }
+        ];
       };
     };
   };
@@ -425,10 +413,7 @@ toIR {
     key = "020_vaultwarden_ec2/state.json";
   };
 
-  dataSources = [
-    caller
-    zone
-  ];
+  dataSources = [ zone ];
 
   resources = [
     vmimportRole

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `plan` after a successful `apply` reported the EC2 demo's SSM policy as
+  changed, every time, even though the applied policy was correct. Its document
+  was derived from a data source at run time, which cannot be resolved while
+  planning; it is now built from the account id you already supply as a
+  variable. A plan with no changes is now empty.
+
 - The Hetzner demo failed on its first apply because the hcloudimage provider
   binary had never been built: nivis execs a provider by path, and nothing
   realised it. The provider is now part of the dev shell, so
@@ -34,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backend — with nothing keeping them in step. One variable now feeds both.
 
 ### Changed
+
+- Requires nivis >= 0.6.1: `plan` fails on any domain that builds an image
+  before that release.
 
 - Requires nivis >= 0.6.0. Building a machine image during an apply needs the
   `__build` fix from that release: before it, nivis could only substitute a

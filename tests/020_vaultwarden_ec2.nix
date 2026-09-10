@@ -208,11 +208,29 @@ in
 
   # --- 4.1 / 4.2 the secret is granted, never carried ---------------------
   (t "ec2: no aws_ssm_parameter resource exists" (!(builtins.elem "aws_ssm_parameter" types)))
-  (t "ec2: the SSM policy grants only GetParameter" (
+  # A plain string, not a derived value. A derived value is unknown while
+  # planning, which made this policy report an update on every plan even though
+  # the applied document was correct — the account id is a required variable, so
+  # there was never anything to discover at run time.
+  (t "ec2: the SSM policy document is a plain, fully-resolved string" (
     let
       d = (byId "aws.aws_iam_policy.ssm_read").config.policy;
     in
-    builtins.isAttrs d && d ? __derived
+    builtins.isString d && builtins.match ".*__derived.*" d == null
+  ))
+  (t "ec2: the SSM policy grants only GetParameter, on exactly one parameter" (
+    let
+      d = builtins.fromJSON (byId "aws.aws_iam_policy.ssm_read").config.policy;
+      st = builtins.head d.Statement;
+    in
+    st.Action == [ "ssm:GetParameter" ]
+    && builtins.match "arn:aws:ssm:[^:]+:[0-9]+:parameter/.*" st.Resource != null
+  ))
+  (t "ec2: the policy is scoped to the guarded account, not a wildcard" (
+    let
+      st = builtins.head (builtins.fromJSON (byId "aws.aws_iam_policy.ssm_read").config.policy).Statement;
+    in
+    builtins.match ".*:\\*:parameter.*" st.Resource == null
   ))
   (t "ec2: no domain IR contains the fake admin token" (
     builtins.all (i: builtins.match ".*${fakeToken}.*" (builtins.toJSON i) == null) (
