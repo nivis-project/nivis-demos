@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Hetzner server never booted. The image was built as `raw-efi`, but
+  Hetzner's x86 line boots legacy BIOS — only the ARM `cax*` line is UEFI — so
+  SeaBIOS found no MBR bootloader and stopped at "Booting from Hard Disk". The
+  host now builds the `raw` variant and boots GRUB from an MBR disk.
+- With that fixed the machine still dropped to stage-1 emergency: the initrd
+  carried the stock bare-metal module set and no virtio driver at all, so Linux
+  could not see a disk that GRUB had just read over BIOS INT13h. The host now
+  imports the `qemu-guest` profile.
+
 - The Hetzner demo's server could not be encoded against the provider schema.
   hcloud reports most resource ids as strings while consuming them as numbers,
   and hcloudimage types its snapshot id as an int64 where `hcloud_server.image`

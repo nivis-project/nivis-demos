@@ -17,6 +17,7 @@
 {
   config,
   pkgs,
+  modulesPath,
   ...
 }:
 let
@@ -24,6 +25,15 @@ let
 in
 {
   imports = [
+    # Hetzner Cloud is KVM and presents everything over virtio — the system
+    # disk as virtio-scsi (hence /dev/sda and the scsi-0HC_Volume_* ids the
+    # unit below looks for). The stock initrd module set is bare-metal (ahci,
+    # nvme, ata_piix) and carries no virtio driver, so Linux would see no disk
+    # at all: GRUB loads the kernel over BIOS INT13h, then the root device
+    # never appears and stage 1 drops to emergency. This profile is what makes
+    # the disk visible to the kernel.
+    "${modulesPath}/profiles/qemu-guest.nix"
+
     (import ../vaultwarden {
       inherit domain;
       dataDevice = "/dev/disk/by-label/${dataLabel}";
@@ -79,25 +89,28 @@ in
   };
 
   # --- boot ---------------------------------------------------------------
-  # cx22 is x86 and boots UEFI; the raw-efi image lays out ESP + root.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = false;
-  boot.loader.grub.enable = false;
+  # Hetzner Cloud x86 boots legacy BIOS (SeaBIOS); only the ARM `cax*` line is
+  # UEFI. A UEFI-only image gets as far as SeaBIOS printing "Booting from Hard
+  # Disk" and then stops, because a GPT+ESP disk carries no MBR bootloader for
+  # it to chain into. So this host is GRUB on an MBR disk, from the `raw` image
+  # variant — the one real cost of diverging from the infra repo's ARM.
+  boot.loader.grub.enable = true;
+  # Hetzner presents SCSI: the system disk is sda, volumes are sdb onwards.
+  # The `raw` variant defaults this to /dev/vda, which is not what boots here.
+  boot.loader.grub.devices = [ "/dev/sda" ];
+  boot.loader.systemd-boot.enable = false;
 
-  # The raw-efi image defines these itself, but only inside the image variant —
-  # the base configuration does not get them, so `system.build.toplevel` fails
-  # its root-filesystem assertion without them. Declaring the same values keeps
-  # the host evaluable on its own, which is also what makes
+  # The raw image defines this itself, but only inside the image variant — the
+  # base configuration does not get it, so `system.build.toplevel` fails its
+  # root-filesystem assertion without it. Declaring the same value keeps the
+  # host evaluable on its own, which is also what makes
   # `nixos-rebuild --target-host` usable for the host-key enrolment step.
-  # Values match nixos/modules/virtualisation/disk-image.nix exactly.
+  # Value matches nixos/modules/virtualisation/disk-image.nix exactly. There is
+  # no /boot entry: a legacy image has no ESP.
   fileSystems."/" = {
     device = "/dev/disk/by-label/nixos";
     autoResize = true;
     fsType = "ext4";
-  };
-  fileSystems."/boot" = {
-    device = "/dev/disk/by-label/ESP";
-    fsType = "vfat";
   };
 
   services.openssh.enable = true;

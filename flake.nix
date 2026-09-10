@@ -173,10 +173,12 @@
           ];
         };
 
-      # raw-efi: a bootable UEFI disk image, which is what hcloudimage uploads
-      # and snapshots. Same shape as the infra repo, but straight from nixpkgs.
+      # raw: a bootable legacy-BIOS disk image, which is what hcloudimage
+      # uploads and snapshots. The infra repo builds raw-efi because it runs on
+      # Hetzner's ARM line, which is UEFI. x86 Hetzner is SeaBIOS, so choosing
+      # x86 here forces the image variant to change with it.
       mkVaultwardenHetznerImage =
-        { domain }: (mkVaultwardenHetznerHost { inherit domain; }).config.system.build.images.raw-efi;
+        { domain }: (mkVaultwardenHetznerHost { inherit domain; }).config.system.build.images.raw;
 
       # The hcloudimage provider as a store path: nivis resolves a filesystem
       # path as the provider binary itself, so there is no registry round-trip.
