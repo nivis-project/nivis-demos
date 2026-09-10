@@ -303,7 +303,7 @@ and the address are unaffected.
 
 A server, a volume and a primary IP bill by the hour.
 `./stackctl demo 030_vaultwarden_hetzner destroy` when you are done. The image
-is x86 (`cx22`) so it builds natively on any x86_64 machine; no emulation and no
+is x86 (`cx23`) so it builds natively on any x86_64 machine; no emulation and no
 remote builder needed.
 
 ## Working on a domain

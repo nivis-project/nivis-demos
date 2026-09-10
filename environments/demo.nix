@@ -93,6 +93,9 @@
     # --- Hetzner ---------------------------------------------------------
     # A Hetzner API token is scoped to one project by construction, so unlike
     # AWS there is no account to pin: whichever token you export IS the guard.
+    # Everything Hetzner here is location-scoped. Datacenter pinning left the
+    # API on 2026-07-01 and the provider deprecated `datacenter` with it, so a
+    # datacenter name is now silently dropped on create rather than honoured.
     hcloudLocation = {
       type = "str";
       default = "fsn1";
@@ -101,16 +104,13 @@
     # x86, deliberately diverging from the infra repo's ARM. The image then
     # builds natively on any x86_64 machine, instead of needing binfmt
     # emulation or a remote builder just to try the demo.
+    #
+    # Hetzner rotates these names and retires whole generations: cx11 gave way
+    # to cx22, and cx22 to cx23 (same 2 vCPU / 4 GB / 40 GB shape). Expect to
+    # bump this again; `hcloud server-type list` is the authority.
     hcloudServerType = {
       type = "str";
-      default = "cx22";
-    };
-
-    # Primary IPs are datacenter-scoped, not location-scoped, so this is a
-    # separate value from hcloudLocation and must sit inside it.
-    hcloudDatacenter = {
-      type = "str";
-      default = "fsn1-dc14";
+      default = "cx23";
     };
 
     hetznerVolumeSizeGb = {

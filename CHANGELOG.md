@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Hetzner demo could not create a primary IP or a server: Hetzner removed
+  datacenter pinning from the API on 2026-07-01 and the provider deprecated
+  `datacenter` in v1.67.0, so the value was accepted by the schema and then
+  dropped on create, leaving the API to reject a request naming neither
+  `location` nor `assignee_id`. Both resources are now location-scoped and the
+  `hcloudDatacenter` variable is gone.
+- The `cx22` server type no longer exists. Hetzner retired that whole
+  generation; the demo now uses `cx23`, its like-for-like successor at the same
+  2 vCPU / 4 GB / 40 GB.
+
 - `plan` after a successful `apply` reported the EC2 demo's SSM policy as
   changed, every time, even though the applied policy was correct. Its document
   was derived from a data source at run time, which cannot be resolved while

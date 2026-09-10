@@ -76,7 +76,7 @@ let
     config = {
       name = name;
       type = "ipv4";
-      datacenter = vars.hcloudDatacenter;
+      location = vars.hcloudLocation;
       assignee_type = "server";
       auto_delete = false;
     };
@@ -136,7 +136,7 @@ let
     config = {
       name = name;
       server_type = vars.hcloudServerType;
-      datacenter = vars.hcloudDatacenter;
+      location = vars.hcloudLocation;
       # Our snapshot, via our own provider — the round trip that makes the
       # machine a derivation rather than an image somebody uploaded once.
       image = osImage.refAttr "id";
