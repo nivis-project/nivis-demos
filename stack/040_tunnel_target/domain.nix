@@ -44,6 +44,20 @@ let
 
   imageSource = if image != null then drv image else "/placeholder/nixos-amazon-image.vhd";
 
+  # The S3 key carries the image's store hash, and that is load-bearing rather
+  # than tidy.
+  #
+  # With a constant key, the snapshot import depends on a bucket and a name that
+  # never change, so a new image uploads a new file and nothing downstream
+  # moves: no new snapshot, no new AMI, no new machine. The apply reports
+  # success and the change never reaches the target. That happened here, and it
+  # is silent, which is the worst property a deploy step can have.
+  #
+  # Naming the object after the image makes the image part of the snapshot's
+  # identity, so the whole chain re-runs exactly when the image differs and
+  # never when it does not.
+  imageKey = if image != null then "${baseNameOf image.outPath}.vhd" else "placeholder.vhd";
+
   # --- vmimport: lets EC2 turn our uploaded disk into a snapshot -------------
   # EC2 will not import a disk on its own behalf; it assumes a role that must
   # trust the vmimport service and be allowed to read the bucket. Same shape as
@@ -136,7 +150,7 @@ let
     name = "image";
     config = {
       bucket = imageBucket.refAttr "id";
-      key = "nixos.vhd";
+      key = imageKey;
       source = imageSource;
     };
   };
@@ -155,7 +169,7 @@ let
           user_bucket = [
             {
               s3_bucket = imageBucket.refAttr "id";
-              s3_key = "nixos.vhd";
+              s3_key = imageKey;
             }
           ];
         }
@@ -172,6 +186,11 @@ let
       name = name;
       virtualization_type = "hvm";
       root_device_name = "/dev/xvda";
+      # What the image says about itself: amazon-image builds a legacy+gpt disk
+      # on x86 and writes boot_mode = "legacy-bios" into its own image-info.json.
+      # Left empty, EC2 falls back to the instance type's default, which happens
+      # to agree today and is one more thing that could quietly stop agreeing.
+      boot_mode = "legacy-bios";
       ena_support = true;
       ebs_block_device = [
         {

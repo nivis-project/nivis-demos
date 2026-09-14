@@ -84,6 +84,29 @@ in
       (builtins.head (byType "aws_ami").config.ebs_block_device).snapshot_id
   ))
 
+  # The image must be part of the snapshot's identity.
+  #
+  # This is here because it failed. With a constant key, a rebuilt image
+  # uploaded a new file under the same name, the snapshot import saw no change
+  # to its inputs, and the AMI and the machine stayed as they were. The apply
+  # reported success and the new image never reached the target. Tying the two
+  # keys together is what makes the upload and the import the same object, and
+  # deriving that key from the image is what makes a different image a different
+  # object.
+  (tWith "tunnel target: the snapshot imports the exact object we uploaded" (
+    (builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket)
+    .s3_key == (byType "aws_s3_object").config.key
+  ) "object key ${(byType "aws_s3_object").config.key} vs import key ${
+    (builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket)
+    .s3_key
+  }")
+
+  # amazon-image writes boot_mode = "legacy-bios" into its own image-info.json
+  # on x86. Saying it here means EC2 is told rather than left to infer.
+  (t "tunnel target: the AMI declares the boot mode the image was built for" (
+    (byType "aws_ami").config.boot_mode == "legacy-bios"
+  ))
+
   (t "tunnel target: the snapshot is imported from the bucket this domain owns" (
     isRefTo "aws.aws_s3_bucket.image" "id"
       (builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket)
