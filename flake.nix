@@ -18,6 +18,13 @@
     # Our own provider: uploads a disk image into a Hetzner project and turns it
     # into a snapshot, so a Hetzner server boots an image this repo built.
     # Consumed as a Nix store path — no registry round-trip.
+    # The tunnel: reach a machine that has no inbound port. 040 uses its agent
+    # module in the bootstrap image and its relay to get back in.
+    nivis-tunnel = {
+      url = "github:nivis-project/nivis-tunnel";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     hcloudimage = {
       url = "github:nivis-project/terraform-provider-hcloudimage";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -30,6 +37,7 @@
       nixpkgs,
       nivis,
       agenix,
+      nivis-tunnel,
       hcloudimage,
     }:
     let
@@ -80,6 +88,9 @@
           mkImage = mkVaultwardenHetznerImage;
           inherit hcloudimageBin;
         };
+        "040_tunnel_target" = mkDomain env ./stack/040_tunnel_target/domain.nix {
+          mkImage = mkTunnelTargetImage;
+        };
       };
 
       # The same domains as the checks see them: no image builder, so evaluating
@@ -96,6 +107,9 @@
           "030_vaultwarden_hetzner" = mkDomain env ./stack/030_vaultwarden_hetzner/domain.nix {
             mkImage = _: null;
             inherit hcloudimageBin;
+          };
+          "040_tunnel_target" = mkDomain env ./stack/040_tunnel_target/domain.nix {
+            mkImage = _: null;
           };
         };
 
@@ -163,6 +177,23 @@
         }:
         (mkVaultwardenEc2Host { inherit domain awsRegion; }).config.system.build.images.amazon;
 
+      # The bootstrap system for 040: the smallest machine that can accept one
+      # push, and nothing that listens to the outside world.
+      mkTunnelTargetHost =
+        args:
+        nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            (import ./nixos/tunnel-target/configuration.nix (
+              args // { agentModule = nivis-tunnel.nixosModules.agent; }
+            ))
+          ];
+        };
+
+      # amazon: a VHD the EC2 import turns into a snapshot, exactly as the
+      # Vaultwarden EC2 demo does.
+      mkTunnelTargetImage = args: (mkTunnelTargetHost args).config.system.build.images.amazon;
+
       mkVaultwardenHetznerHost =
         { domain }:
         nixpkgs.lib.nixosSystem {
@@ -229,6 +260,7 @@
         ./tests/account-guard.nix
         ./tests/020_vaultwarden_ec2.nix
         ./tests/030_vaultwarden_hetzner.nix
+        ./tests/040_tunnel_target.nix
         ./tests/vaultwarden-module.nix
         ./tests/vars.nix
         ./tests/secrets.nix
@@ -311,6 +343,10 @@
       # store, after which the realise is a no-op.
       lib = {
         inherit mkVaultwardenEc2Image servedName;
+        # Exposed so the bootstrap image can be built and inspected directly,
+        # without going through an apply. What is IN that image is the claim
+        # 040 makes, so it should be checkable on its own.
+        inherit mkTunnelTargetHost mkTunnelTargetImage;
       };
 
       devShells = forAllSystems (pkgs: {

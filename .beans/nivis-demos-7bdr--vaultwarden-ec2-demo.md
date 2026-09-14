@@ -1,11 +1,11 @@
 ---
 # nivis-demos-7bdr
 title: vaultwarden ec2 demo
-status: draft
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-07T14:30:03Z
-updated_at: 2026-09-07T14:45:14Z
+updated_at: 2026-09-10T21:02:31Z
 parent: nivis-demos-d27r
 ---
 

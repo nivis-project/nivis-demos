@@ -27,6 +27,22 @@ let
     id: attr: v:
     builtins.isAttrs v && v ? __ref && v.__ref.resource == id && v.__ref.path == [ attr ];
 
+  # Some of these values cannot be plain references, because hcloud is
+  # inconsistent about id types: it reports most resource ids as strings while
+  # consuming them as numbers, and hcloudimage types its snapshot id as an
+  # int64 where hcloud_server.image wants a string. Those crossings go through
+  # `str` or `num`, which produce a __derived leaf carrying the same dependency.
+  #
+  # The assertions below care that the value COMES FROM that resource's id.
+  # Whether a type bridge sits in between is a fact about two providers
+  # disagreeing, not about this domain being wired correctly.
+  dependsOnId =
+    id: attr: v:
+    let
+      key = "${id}.${attr}";
+    in
+    isRefTo id attr v || (builtins.isAttrs v && v ? __derived && v.__derived.inputs == [ key ]);
+
   ipId = "hcloud.hcloud_primary_ip.vaultwarden";
   serverId = "hcloud.hcloud_server.vaultwarden";
   volId = "hcloud.hcloud_volume.data";
@@ -86,14 +102,14 @@ in
 
   # --- the server boots OUR snapshot ---------------------------------------
   (t "hetzner: the server boots the snapshot this repo produced" (
-    isRefTo "hcloudimage.hcloudimage_image.os" "id" (byType "hcloud_server").config.image
+    dependsOnId "hcloudimage.hcloudimage_image.os" "id" (byType "hcloud_server").config.image
   ))
   (t "hetzner: the server uses the reserved primary IP" (
     isRefTo ipId "id" (builtins.head (byType "hcloud_server").config.public_net).ipv4
   ))
   (t "hetzner: the volume attaches to the server" (
-    isRefTo volId "id" (byType "hcloud_volume_attachment").config.volume_id
-    && isRefTo serverId "id" (byType "hcloud_volume_attachment").config.server_id
+    dependsOnId volId "id" (byType "hcloud_volume_attachment").config.volume_id
+    && dependsOnId serverId "id" (byType "hcloud_volume_attachment").config.server_id
   ))
   (t "hetzner: the host mounts the volume itself, so hcloud must not" (
     (byType "hcloud_volume_attachment").config.automount == false
@@ -103,8 +119,15 @@ in
   ))
 
   # --- firewall ------------------------------------------------------------
-  (tWith "hetzner: only 443 and 80 are open to the world" (
+  # 22 is open because the agenix enrolment needs the host's ssh public key, and
+  # reading it is the one thing that cannot be done without reaching the host:
+  # there is no console login on this image (root is locked, no keys, no users)
+  # and Hetzner has no SSM equivalent. `ssh-keyscan` takes the PUBLIC host key
+  # from the protocol banner before authentication, so the port grants no login
+  # — sshd here accepts none. See nivis-demos-x98i.
+  (tWith "hetzner: only 443, 80 and the enrolment's 22 are open to the world" (
     builtins.sort builtins.lessThan openPorts == [
+      "22"
       "443"
       "80"
     ]

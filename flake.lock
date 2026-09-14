@@ -104,6 +104,26 @@
         "type": "github"
       }
     },
+    "nivis-tunnel": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789397638,
+        "narHash": "sha256-iMaY6It7HwWQIEhw9L3oySc0huWK9fZo6dMPSl3Kvwc=",
+        "owner": "nivis-project",
+        "repo": "nivis-tunnel",
+        "rev": "de08be24666791997c0b09d51b80627e3c4a0131",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nivis-project",
+        "repo": "nivis-tunnel",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1781454065,
@@ -139,6 +159,7 @@
         "agenix": "agenix",
         "hcloudimage": "hcloudimage",
         "nivis": "nivis",
+        "nivis-tunnel": "nivis-tunnel",
         "nixpkgs": "nixpkgs_2"
       }
     },

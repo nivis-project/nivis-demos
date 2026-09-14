@@ -113,6 +113,42 @@
       default = "cx23";
     };
 
+    # --- 040 tunnel target ------------------------------------------------
+    # Reachable only through nivis-tunnel: no inbound port, no DNS record, no
+    # address anyone needs to know. The tunnel finds it by stream id.
+    tunnelRelay = {
+      type = "str";
+      default = "relay.invalid:7843";
+    };
+
+    # An identifier, never a credential. Anyone may claim one; all authority
+    # comes from the handshake, so this is safe in a public repository.
+    tunnelStreamId = {
+      type = "str";
+      default = "poc-target-aws-01";
+    };
+
+    # The orchestrator's PUBLIC key, so it is safe here and safe in the AMI.
+    # That is exactly what lets a boot image carry key material and no secret.
+    # The default is a real, well-formed key whose private half nobody has —
+    # fake by design, like every other default in this file.
+    tunnelOrchestratorKey = {
+      type = "str";
+      default = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    };
+
+    # The operator's ssh public key. ssh authenticates the session; the tunnel
+    # only carries it.
+    tunnelSshKey = {
+      type = "str";
+      default = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA nobody@invalid";
+    };
+
+    tunnelInstanceType = {
+      type = "str";
+      default = "t3.micro";
+    };
+
     hetznerVolumeSizeGb = {
       type = "int";
       default = 10; # Hetzner's minimum volume size
