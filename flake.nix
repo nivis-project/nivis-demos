@@ -100,7 +100,7 @@
         "040_tunnel_target" = mkDomain env ./stack/040_tunnel_target/domain.nix {
           mkImage = mkTunnelTargetImage;
           mkLiveSystem = mkTunnelTargetLiveSystem;
-          inherit tunnelProviderBin;
+          inherit tunnelProviderBin tunnelCliBin;
         };
       };
 
@@ -126,6 +126,7 @@
             mkImage = _: null;
             mkLiveSystem = _: null;
             tunnelProviderBin = "/nix/store/stub/bin/terraform-provider-nivis-tunnel";
+            tunnelCliBin = "/nix/store/stub/bin/nivis-tunnel";
           };
         };
 
@@ -258,6 +259,14 @@
       # in the dev shell or `nix develop -c ./stackctl` gets ENOENT on apply.
       tunnelProviderPkg = nivis-tunnel-provider.packages.x86_64-linux.terraform-provider-nivis-tunnel;
 
+      # The tunnel client, as an absolute store path.
+      #
+      # The provider runs it as ssh's ProxyCommand, and it runs under nivis
+      # rather than in the operator's shell, so "it is on PATH" is a hope. The
+      # provider's own schema says as much: name it explicitly when it runs
+      # somewhere the operator does not control.
+      tunnelCliPkg = nivis-tunnel.packages.x86_64-linux.tunnel;
+
       # The dev shell's contents, as one list so the provider cannot be in the
       # shell for some purposes and absent for others. A test asserts the
       # provider binary the Hetzner domain execs lives under one of these.
@@ -265,6 +274,7 @@
         nivis.packages.${pkgs.stdenv.hostPlatform.system}.nivis
         hcloudimagePkg
         tunnelProviderPkg
+        tunnelCliPkg
         pkgs.awscli2
         pkgs.hcloud
         pkgs.age
@@ -275,6 +285,7 @@
       ];
       hcloudimageBin = "${hcloudimagePkg}/bin/terraform-provider-hcloudimage";
       tunnelProviderBin = "${tunnelProviderPkg}/bin/terraform-provider-nivis-tunnel";
+      tunnelCliBin = "${tunnelCliPkg}/bin/nivis-tunnel";
 
       # Each workload's own name under the environment's domain. Demos never
       # claim the apex — that name belongs to the operator, not to an example.
@@ -369,6 +380,7 @@
                 env = environments.demo;
                 mkImage = _: null;
                 tunnelProviderBin = "/nix/store/stub/bin/terraform-provider-nivis-tunnel";
+                tunnelCliBin = "/nix/store/stub/bin/nivis-tunnel";
                 mkLiveSystem =
                   _:
                   nixpkgs.legacyPackages.x86_64-linux.runCommand "fake-live-system-${tag}" { } ''

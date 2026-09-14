@@ -191,6 +191,21 @@ in
     builtins.isString activation.config.key_file && activation.config.key_file != ""
   ))
 
+  # Both of these carry a schema default in the provider, and both are asserted
+  # because the default does not arrive. Nivis sends an unset optional-computed
+  # attribute as unknown where Terraform sends null, and the framework applies a
+  # Default only for null, so the provider receives an empty string. That cost
+  # an apply to discover: the ProxyCommand lost its first word and the shell
+  # reported `Unknown command: connect`. See nixform2-1mk0.
+  (tWith "tunnel target: the activation names the tunnel client by absolute path" (
+    builtins.isString (activation.config.tunnel_command or null)
+    && builtins.substring 0 1 (activation.config.tunnel_command or "") == "/"
+  ) "tunnel_command: ${builtins.toJSON (activation.config.tunnel_command or null)}")
+
+  (tWith "tunnel target: the activation states its profile rather than inheriting one" (
+    (activation.config.profile or "") != ""
+  ) "profile: ${builtins.toJSON (activation.config.profile or null)}")
+
   (t "tunnel target: the activation goes through the tunnel's own provider" (
     activation.provider == "nivis-tunnel" && ir.providers ? "nivis-tunnel"
   ))

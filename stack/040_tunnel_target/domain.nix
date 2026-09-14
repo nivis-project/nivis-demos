@@ -31,6 +31,10 @@
   # The activation provider as a filesystem path. nivis execs it directly, so
   # there is no registry round-trip and no published version to pin.
   tunnelProviderBin,
+
+  # The tunnel CLIENT, also as a path. The provider runs it as ssh's
+  # ProxyCommand, under nivis rather than in the operator's shell.
+  tunnelCliBin,
 }:
 ledger:
 let
@@ -311,6 +315,24 @@ let
       # only secret in this system and it does not belong in a repo that is
       # public by design.
       key_file = vars.tunnelKeyFile;
+
+      # Both of these have schema defaults in the provider, and both are set
+      # here anyway. That is not belt and braces, it is a workaround for a real
+      # defect: nivis sends unset optional-computed attributes as UNKNOWN in the
+      # config, where Terraform sends null, and terraform-plugin-framework
+      # applies a Default only for null. So the defaults never fire and the
+      # provider receives empty strings.
+      #
+      # It cost an apply to find. The ProxyCommand came out as " connect
+      # <id> ..." with its first word missing, and the shell reported
+      # `Unknown command: connect`. The profile would have been empty too,
+      # which would have been worse and less obvious. See nixform2-1mk0.
+      #
+      # The client is an absolute store path rather than a name, which is what
+      # the provider's own schema recommends for exactly this situation: it runs
+      # under nivis, not in the operator's shell, so being on PATH is a hope.
+      tunnel_command = tunnelCliBin;
+      profile = "/nix/var/nix/profiles/system";
     };
   };
 in
