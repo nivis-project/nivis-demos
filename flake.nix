@@ -194,6 +194,23 @@
       # Vaultwarden EC2 demo does.
       mkTunnelTargetImage = args: (mkTunnelTargetHost args).config.system.build.images.amazon;
 
+      # The live system for 040: the bootstrap configuration plus everything it
+      # deliberately left out. Built as a toplevel rather than an image, because
+      # the whole point is that it never becomes one.
+      mkTunnelTargetLiveHost =
+        args:
+        nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            (import ./nixos/tunnel-target/live.nix (args // { agentModule = nivis-tunnel.nixosModules.agent; }))
+          ];
+        };
+
+      # What the activation resource pushes. `drv` of this is a `__build` leaf,
+      # so the store path IS the diff: nothing computes a hash, sets a trigger
+      # or compares configurations.
+      mkTunnelTargetLiveSystem = args: (mkTunnelTargetLiveHost args).config.system.build.toplevel;
+
       mkVaultwardenHetznerHost =
         { domain }:
         nixpkgs.lib.nixosSystem {
@@ -347,6 +364,7 @@
         # without going through an apply. What is IN that image is the claim
         # 040 makes, so it should be checkable on its own.
         inherit mkTunnelTargetHost mkTunnelTargetImage;
+        inherit mkTunnelTargetLiveHost mkTunnelTargetLiveSystem;
       };
 
       devShells = forAllSystems (pkgs: {
