@@ -93,13 +93,13 @@ in
   # keys together is what makes the upload and the import the same object, and
   # deriving that key from the image is what makes a different image a different
   # object.
-  (tWith "tunnel target: the snapshot imports the exact object we uploaded" (
-    (builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket)
-    .s3_key == (byType "aws_s3_object").config.key
-  ) "object key ${(byType "aws_s3_object").config.key} vs import key ${
-    (builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket)
-    .s3_key
-  }")
+  (tWith "tunnel target: the snapshot imports the exact object we uploaded"
+    (
+      (builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket)
+      .s3_key == (byType "aws_s3_object").config.key
+    )
+    "object key ${(byType "aws_s3_object").config.key} vs import key ${(builtins.head (builtins.head (byType "aws_ebs_snapshot_import").config.disk_container).user_bucket).s3_key}"
+  )
 
   # amazon-image writes boot_mode = "legacy-bios" into its own image-info.json
   # on x86. Saying it here means EC2 is told rather than left to infer.
