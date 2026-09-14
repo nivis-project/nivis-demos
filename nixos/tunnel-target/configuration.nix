@@ -85,60 +85,45 @@
   # something observable to prove it took effect.
   environment.etc."tunnel-target-generation".text = "bootstrap\n";
 
-  # --- weight --------------------------------------------------------------
-  # A first pass, not a real minimisation. What is removed here is what is
-  # plainly unused; what remains is either load-bearing or not yet measured.
+  # --- weight ---------------------------------------------------------------
+  # Deliberately NOT trimmed, for now.
+  #
+  # A first pass removed the manuals, the flake registry, `defaultPackages` and
+  # the SSM agent. It was then reverted, not because it was wrong but because it
+  # was unproven: the first target built from this file never came up, and a
+  # thinned image was the obvious thing to suspect.
+  #
+  # It has since been cleared. The image was built and booted locally under
+  # SeaBIOS with the disk presented as NVMe, the way Nitro presents EBS, and it
+  # reached systemd, finished growpart and got as far as the EC2 metadata
+  # service, which is the first thing that cannot exist outside EC2. So the
+  # cause of that failure lies elsewhere, and the trim comes back once a target
+  # has come up at all.
   #
   # The reason to care is not disk. It is that this image is the ONE thing a
   # closure push cannot replace, so every megabyte in it is a megabyte that can
-  # only be changed by rebuilding the image — and an image rebuild is a
+  # only be changed by rebuilding the image, and an image rebuild is a
   # fleet-wide machine replacement.
-
-  # Nothing reads documentation on a machine whose only interactive use is
-  # debugging through a tunnel.
-  documentation.enable = false;
-  documentation.nixos.enable = false;
-  documentation.man.enable = false;
-  documentation.info.enable = false;
-
-  # amazon-image turns this on by default, and it is the one package in here
-  # that is funny to find: the boot image of a project built to replace SSM,
-  # shipping the SSM agent.
   #
-  # It could not work anyway — SSM needs an instance profile and the domain
-  # deliberately creates none — so this is not a second way in that would
-  # undermine what rung 0 proves. It is dead weight that says the opposite of
-  # what this image is for.
-  # mkForce because amazon-image sets it at the same priority.
-  services.amazon-ssm-agent.enable = lib.mkForce false;
-
-  # The single largest item in the closure, and not the manuals as first
-  # assumed: /etc/nix/registry.json pins the `nixpkgs` flake to the source tree,
-  # so the whole 197 MiB of it comes along. That buys `nix run nixpkgs#...`
-  # working offline here, on a machine nobody works on interactively.
-  nix.registry = lib.mkForce { };
-
-  # perl, rsync and strace. Useful on a machine someone logs into to work;
-  # this is not one. If a debugging session ever needs them, they arrive in
-  # the pushed closure, which is the whole point of the split.
-  environment.defaultPackages = [ ];
-
-  # Deliberately NOT removed, and worth writing down so the next pass does not
-  # have to rediscover it:
+  # Measured, and worth keeping when it returns:
   #
-  #   nix        the target receives closures and runs switch-to-configuration;
-  #              without it there is no deploying to this machine at all
-  #   grub       amazon-image boots through it
-  #   nixos-rebuild-ng
-  #              pulls python3, 127 MiB, and is the largest remaining item
-  #              after the kernel. This machine never rebuilds itself — a
-  #              closure is pushed to it and switch-to-configuration is called —
-  #              so it is the obvious next cut. Left in because removing a
-  #              machine's ability to rebuild itself changes what happens when a
-  #              deploy goes wrong, and no target has run yet to find out.
-  #   amazon-init  part of amazon-image's bootstrap. We use neither its
-  #              user-data handling nor its ssh key injection — the agent and
-  #              the authorized key are baked in — so it is a candidate, but
-  #              removing it is a change to how the machine comes up and wants
-  #              its own test rather than a guess.
+  #   nix.registry        /etc/nix/registry.json pins the `nixpkgs` flake to the
+  #                       source tree, so all 197 MiB of it comes along. The
+  #                       single largest item, and not the manuals as first
+  #                       assumed.
+  #   documentation       nobody reads man pages on a machine whose only
+  #                       interactive use is debugging through a tunnel
+  #   defaultPackages     perl, rsync, strace: they arrive in the pushed
+  #                       closure if a debugging session ever needs them
+  #   amazon-ssm-agent    the boot image of a project built to replace SSM,
+  #                       shipping the SSM agent. It could not work anyway,
+  #                       since the domain creates no instance profile.
+  #
+  # Load-bearing, so not candidates:
+  #
+  #   nix                 the target receives closures and runs
+  #                       switch-to-configuration
+  #   grub                amazon-image boots through it
+  #   amazon-init         part of how the machine comes up; removing it wants
+  #                       its own test rather than a guess
 }
