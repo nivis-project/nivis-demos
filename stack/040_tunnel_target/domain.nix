@@ -32,9 +32,10 @@
   # there is no registry round-trip and no published version to pin.
   tunnelProviderBin,
 
-  # The tunnel CLIENT, also as a path. The provider runs it as ssh's
-  # ProxyCommand, under nivis rather than in the operator's shell.
-  tunnelCliBin,
+  # The tunnel CLIENT as a derivation, so `drv` makes it a `__build` leaf that
+  # nivis realises before apply. The provider runs it as ssh's ProxyCommand,
+  # under nivis rather than in the operator's shell.
+  tunnelCli,
 }:
 ledger:
 let
@@ -331,7 +332,7 @@ let
       # The client is an absolute store path rather than a name, which is what
       # the provider's own schema recommends for exactly this situation: it runs
       # under nivis, not in the operator's shell, so being on PATH is a hope.
-      tunnel_command = tunnelCliBin;
+      tunnel_command = if tunnelCli != null then drv tunnelCli else "/placeholder/nivis-tunnel";
       profile = "/nix/var/nix/profiles/system";
     };
   };

@@ -100,7 +100,7 @@
         "040_tunnel_target" = mkDomain env ./stack/040_tunnel_target/domain.nix {
           mkImage = mkTunnelTargetImage;
           mkLiveSystem = mkTunnelTargetLiveSystem;
-          inherit tunnelProviderBin tunnelCliBin;
+          inherit tunnelProviderBin tunnelCli;
         };
       };
 
@@ -126,7 +126,9 @@
             mkImage = _: null;
             mkLiveSystem = _: null;
             tunnelProviderBin = "/nix/store/stub/bin/terraform-provider-nivis-tunnel";
-            tunnelCliBin = "/nix/store/stub/bin/nivis-tunnel";
+            # A trivial derivation, never built: evaluation of a `__build`
+            # leaf only reads its paths.
+            tunnelCli = fakeTunnelCli;
           };
         };
 
@@ -267,6 +269,26 @@
       # somewhere the operator does not control.
       tunnelCliPkg = nivis-tunnel.packages.x86_64-linux.tunnel;
 
+      # The same client, tagged so `drv` renders the binary rather than the
+      # directory containing it. That turns the path from a plain string into a
+      # `__build` leaf, which nivis realises from the .drv before apply.
+      #
+      # The difference is not cosmetic. A plain store path in an IR is a string
+      # nothing realises, so a path that was only ever evaluated does not exist
+      # when the provider execs it. That cost two applies: first the attribute
+      # was empty, then it named a path that had never been built.
+      #
+      # `bin/tunnel` and not `bin/nivis-tunnel`: the pinned input predates the
+      # rename of `cmd/tunnel`. Updating the input would change the agent source
+      # too, and therefore the image, the AMI and the machine, so it is a
+      # deliberate not-now rather than an oversight. The name moves when that
+      # update happens for its own reasons.
+      tunnelCli = tunnelCliPkg.overrideAttrs (o: {
+        passthru = (o.passthru or { }) // {
+          filePath = "bin/tunnel";
+        };
+      });
+
       # The dev shell's contents, as one list so the provider cannot be in the
       # shell for some purposes and absent for others. A test asserts the
       # provider binary the Hetzner domain execs lives under one of these.
@@ -285,7 +307,6 @@
       ];
       hcloudimageBin = "${hcloudimagePkg}/bin/terraform-provider-hcloudimage";
       tunnelProviderBin = "${tunnelProviderPkg}/bin/terraform-provider-nivis-tunnel";
-      tunnelCliBin = "${tunnelCliPkg}/bin/nivis-tunnel";
 
       # Each workload's own name under the environment's domain. Demos never
       # claim the apex — that name belongs to the operator, not to an example.
@@ -314,6 +335,19 @@
       # The fake values the gate uses for both. Shared, because the whole claim
       # of the live system is that it is the image plus additions, and two
       # argument sets that drifted apart would quietly stop testing that.
+      # Stands in for the tunnel client in the checks, so the gate can assert the
+      # shape of a `__build` leaf without building a Go program.
+      fakeTunnelCli =
+        (nixpkgs.legacyPackages.x86_64-linux.runCommand "fake-nivis-tunnel" { } ''
+          mkdir -p $out/bin
+          touch $out/bin/tunnel
+        '').overrideAttrs
+          (o: {
+            passthru = (o.passthru or { }) // {
+              filePath = "bin/tunnel";
+            };
+          });
+
       tunnelTargetArgs = {
         orchestratorPublicKey = environments.demo.vars.tunnelOrchestratorKey.default;
         streamId = environments.demo.vars.tunnelStreamId.default;
@@ -380,7 +414,9 @@
                 env = environments.demo;
                 mkImage = _: null;
                 tunnelProviderBin = "/nix/store/stub/bin/terraform-provider-nivis-tunnel";
-                tunnelCliBin = "/nix/store/stub/bin/nivis-tunnel";
+                # A trivial derivation, never built: evaluation of a `__build`
+                # leaf only reads its paths.
+                tunnelCli = fakeTunnelCli;
                 mkLiveSystem =
                   _:
                   nixpkgs.legacyPackages.x86_64-linux.runCommand "fake-live-system-${tag}" { } ''

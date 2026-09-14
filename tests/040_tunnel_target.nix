@@ -197,10 +197,22 @@ in
   # Default only for null, so the provider receives an empty string. That cost
   # an apply to discover: the ProxyCommand lost its first word and the shell
   # reported `Unknown command: connect`. See nixform2-1mk0.
-  (tWith "tunnel target: the activation names the tunnel client by absolute path" (
-    builtins.isString (activation.config.tunnel_command or null)
-    && builtins.substring 0 1 (activation.config.tunnel_command or "") == "/"
+  # A build leaf rather than a string, so nivis realises the client before the
+  # provider execs it. A plain store path in an IR is a string nothing realises,
+  # and a path that was only ever evaluated does not exist on disk. That cost
+  # two applies: the attribute was empty, and then it named a path never built.
+  (tWith "tunnel target: the tunnel client is realised, not merely named" (
+    builtins.isAttrs (activation.config.tunnel_command or null)
+    && (activation.config.tunnel_command or { }) ? __build
   ) "tunnel_command: ${builtins.toJSON (activation.config.tunnel_command or null)}")
+
+  # The binary, not the directory holding it. ssh execs this string directly, so
+  # a directory would fail as a command, and the failure would read like a
+  # missing file rather than a wrong path.
+  (tWith "tunnel target: that leaf points at the binary, not its directory" (
+    builtins.match ".*/bin/[a-z-]+" ((activation.config.tunnel_command or { }).__build.path or "")
+    != null
+  ) "path: ${(activation.config.tunnel_command or { }).__build.path or "none"}")
 
   (tWith "tunnel target: the activation states its profile rather than inheriting one" (
     (activation.config.profile or "") != ""
