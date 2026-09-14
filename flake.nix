@@ -291,6 +291,24 @@
         vaultwarden-hetzner = mkVaultwardenHetznerHost {
           domain = servedName "vault-hetzner" checkVars.domain;
         };
+
+        # Both halves of the tunnel target, from the environment's fake values.
+        # Here rather than only in the tests because `nixosConfigurations` is
+        # this attrset, so the gate builds them: a live system that does not
+        # evaluate is a deploy that fails after the machine is already running.
+        tunnel-target = mkTunnelTargetHost tunnelTargetArgs;
+        tunnel-target-live = mkTunnelTargetLiveHost tunnelTargetArgs;
+      };
+
+      # The fake values the gate uses for both. Shared, because the whole claim
+      # of the live system is that it is the image plus additions, and two
+      # argument sets that drifted apart would quietly stop testing that.
+      tunnelTargetArgs = {
+        orchestratorPublicKey = environments.demo.vars.tunnelOrchestratorKey.default;
+        streamId = environments.demo.vars.tunnelStreamId.default;
+        relay = environments.demo.vars.tunnelRelay.default;
+        sshPublicKey = environments.demo.vars.tunnelSshKey.default;
+        generation = environments.demo.vars.tunnelGeneration.default;
       };
 
       evalTestFiles = [
@@ -341,6 +359,23 @@
               };
             envs = environments;
             hosts = nixosHosts;
+            # 040 with a live system, so a test can prove the closure becomes a
+            # __build leaf. A trivial derivation, not the real system: the gate
+            # must never build one to check the shape of a domain.
+            tunnelWithLive =
+              tag:
+              import ./stack/040_tunnel_target/domain.nix {
+                nivis = nivis.lib;
+                env = environments.demo;
+                mkImage = _: null;
+                tunnelProviderBin = "/nix/store/stub/bin/terraform-provider-nivis-tunnel";
+                mkLiveSystem =
+                  _:
+                  nixpkgs.legacyPackages.x86_64-linux.runCommand "fake-live-system-${tag}" { } ''
+                    mkdir -p $out
+                    echo ${tag} > $out/marker
+                  '';
+              };
             # A domain evaluated WITH an image, so a test can prove the image
             # becomes a __build leaf. Uses a trivial derivation, not the real
             # image: the checks must never force an image build.
