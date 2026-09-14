@@ -20,6 +20,17 @@
   # Builds the bootstrap image. REQUIRED, for the reason the other two domains
   # document: a default of null let a real apply ship a placeholder.
   mkImage,
+
+  # Builds the live system: everything the image deliberately left out. Also
+  # REQUIRED, and for a sharper version of the same reason. A missing image
+  # fails loudly at upload; a missing live system would apply cleanly and leave
+  # the machine on its bootstrap generation, which is the failure this whole
+  # domain exists to make impossible.
+  mkLiveSystem,
+
+  # The activation provider as a filesystem path. nivis execs it directly, so
+  # there is no registry round-trip and no published version to pin.
+  tunnelProviderBin,
 }:
 ledger:
 let
@@ -29,6 +40,7 @@ let
     toIR
     mkVars
     drv
+    derived
     ;
 
   vars = mkVars env.vars (ledger.vars or { });
@@ -43,6 +55,14 @@ let
   };
 
   imageSource = if image != null then drv image else "/placeholder/nixos-amazon-image.vhd";
+
+  liveSystem = mkLiveSystem {
+    orchestratorPublicKey = vars.tunnelOrchestratorKey;
+    streamId = vars.tunnelStreamId;
+    relay = vars.tunnelRelay;
+    sshPublicKey = vars.tunnelSshKey;
+    generation = vars.tunnelGeneration;
+  };
 
   # The S3 key carries the image's store hash, and that is load-bearing rather
   # than tidy.
@@ -250,9 +270,59 @@ let
       };
     };
   };
+  # --- the point of the whole exercise --------------------------------------
+  # Everything above this line builds a machine. This one line changes it.
+  #
+  # `closure` is a `__build` leaf: nivis realises it before apply and hands the
+  # provider a store path that already exists. So a changed configuration IS a
+  # changed store path, and nothing computes a hash, sets a trigger or compares
+  # configurations to notice. A trigger can agree while the closure differs, and
+  # differ while the closure agrees; a store path cannot do either.
+  #
+  # The instance id goes in even though nothing sends it anywhere. A reference
+  # is how ordering is expressed here, and a closure pushed to a machine that is
+  # still booting is a failed apply.
+  activation = mkResource {
+    provider = "nivis-tunnel";
+    type = "nixos_activation";
+    name = "live";
+    config = {
+      closure = if liveSystem != null then drv liveSystem else "/placeholder/nixos-system";
+      # The stream id, wired through the instance so that the instance has to
+      # exist first. Nivis expresses ordering only through references in a
+      # config, and a closure pushed to a machine that is still booting is a
+      # failed apply.
+      #
+      # The rendered value deliberately ignores its input. The id the agent
+      # announces was baked into the image, which is built before any instance
+      # exists, so it cannot be the instance id. And it must stay a stable
+      # string: `stream_id` is ForceNew in the provider, so a value that were
+      # unknown at plan time would replace this resource on every run.
+      #
+      # It does not become unknown, because phases resolve references against
+      # the ledger before the provider is called. That is the same property the
+      # `num` bridge in 030 relies on.
+      stream_id = derived {
+        inputs = [ (instance.refAttr "id") ];
+        render = _: vars.tunnelStreamId;
+      };
+      relay = vars.tunnelRelay;
+      # A path on the operator's machine, never a value. The private key is the
+      # only secret in this system and it does not belong in a repo that is
+      # public by design.
+      key_file = vars.tunnelKeyFile;
+    };
+  };
 in
 toIR {
   providers = {
+    # A filesystem path: nivis uses the binary directly, no registry. Same
+    # shape as hcloudimage in 030, and the same trap — nothing realises this
+    # string, so the package has to be in the dev shell.
+    nivis-tunnel = mkProvider {
+      source = tunnelProviderBin;
+      config = { };
+    };
     aws = mkProvider {
       source = "registry.opentofu.org/hashicorp/aws";
       config = {
@@ -278,6 +348,7 @@ toIR {
     ami
     securityGroup
     instance
+    activation
   ];
 
   outputs = {
@@ -288,6 +359,9 @@ toIR {
     public_ip = instance.refAttr "public_ip";
     instance_id = instance.refAttr "id";
     ami_id = ami.refAttr "id";
+    # What the machine is actually running, read from it rather than remembered.
+    # A manual nixos-rebuild on the target shows up here as drift.
+    current_system = activation.refAttr "current_system";
   };
 
   inherit ledger;

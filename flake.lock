@@ -124,6 +124,48 @@
         "type": "github"
       }
     },
+    "nivis-tunnel-provider": {
+      "inputs": {
+        "nivis-tunnel": "nivis-tunnel_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789407781,
+        "narHash": "sha256-zaLY94C8a+Emg3TUSo5TmaGrHmBxpxB9RZtwjoOXigg=",
+        "owner": "nivis-project",
+        "repo": "terraform-provider-nivis-tunnel",
+        "rev": "3a7fd3547668f0a84f0d9bfc01f11723f0309150",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nivis-project",
+        "repo": "terraform-provider-nivis-tunnel",
+        "type": "github"
+      }
+    },
+    "nivis-tunnel_2": {
+      "inputs": {
+        "nixpkgs": [
+          "nivis-tunnel-provider",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789407572,
+        "narHash": "sha256-wUhh4XrjOUYXE8rtYHQJQrpQjrjtak66HDaxx9ZC7LQ=",
+        "owner": "nivis-project",
+        "repo": "nivis-tunnel",
+        "rev": "a2a6180c29d56c495f9e8810f6fad35434cf8da4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nivis-project",
+        "repo": "nivis-tunnel",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1781454065,
@@ -160,6 +202,7 @@
         "hcloudimage": "hcloudimage",
         "nivis": "nivis",
         "nivis-tunnel": "nivis-tunnel",
+        "nivis-tunnel-provider": "nivis-tunnel-provider",
         "nixpkgs": "nixpkgs_2"
       }
     },

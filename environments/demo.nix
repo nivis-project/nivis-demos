@@ -144,6 +144,29 @@
       default = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA nobody@invalid";
     };
 
+    # Where the orchestrator's PRIVATE key lives on the machine running the
+    # apply. A path and never a value: it is the only secret in this system,
+    # and this repo is public by design.
+    #
+    # The default is deliberately wrong rather than plausible. A default that
+    # happened to work on the author's machine would make this variable
+    # invisible until someone else ran an apply.
+    tunnelKeyFile = {
+      type = "str";
+      default = "/nonexistent/orchestrator.key";
+    };
+
+    # What the live system's marker reports, and the knob rung 3 turns.
+    #
+    # A variable rather than a literal in live.nix, so that proving "a live
+    # configuration change replaces nothing" is a variable change rather than
+    # an edit to the file that also defines the agent. What is being measured
+    # should not share a file with what must not move.
+    tunnelGeneration = {
+      type = "str";
+      default = "live-1";
+    };
+
     tunnelInstanceType = {
       type = "str";
       default = "t3.micro";

@@ -15,9 +15,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Our own provider: uploads a disk image into a Hetzner project and turns it
-    # into a snapshot, so a Hetzner server boots an image this repo built.
-    # Consumed as a Nix store path — no registry round-trip.
     # The tunnel: reach a machine that has no inbound port. 040 uses its agent
     # module in the bootstrap image and its relay to get back in.
     nivis-tunnel = {
@@ -25,6 +22,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # The other half of the tunnel: a provider that activates a closure on a
+    # machine reached through it. This is what makes a configuration change
+    # cheaper than a machine replacement.
+    nivis-tunnel-provider = {
+      url = "github:nivis-project/terraform-provider-nivis-tunnel";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Our own provider: uploads a disk image into a Hetzner project and turns it
+    # into a snapshot, so a Hetzner server boots an image this repo built.
+    # Consumed as a Nix store path — no registry round-trip.
     hcloudimage = {
       url = "github:nivis-project/terraform-provider-hcloudimage";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -38,6 +46,7 @@
       nivis,
       agenix,
       nivis-tunnel,
+      nivis-tunnel-provider,
       hcloudimage,
     }:
     let
@@ -90,6 +99,8 @@
         };
         "040_tunnel_target" = mkDomain env ./stack/040_tunnel_target/domain.nix {
           mkImage = mkTunnelTargetImage;
+          mkLiveSystem = mkTunnelTargetLiveSystem;
+          inherit tunnelProviderBin;
         };
       };
 
@@ -108,8 +119,13 @@
             mkImage = _: null;
             inherit hcloudimageBin;
           };
+          # Null builders for the same reason the other two have them: the gate
+          # must never build a multi-GB image, nor a whole NixOS system, to
+          # evaluate a domain. `tunnelWithLive` below covers what that omits.
           "040_tunnel_target" = mkDomain env ./stack/040_tunnel_target/domain.nix {
             mkImage = _: null;
+            mkLiveSystem = _: null;
+            tunnelProviderBin = "/nix/store/stub/bin/terraform-provider-nivis-tunnel";
           };
         };
 
@@ -238,12 +254,17 @@
       # problem as an unrealised __build leaf, one layer up.
       hcloudimagePkg = hcloudimage.packages.x86_64-linux.default;
 
+      # Same shape, same reason: nivis execs the path, so the package has to be
+      # in the dev shell or `nix develop -c ./stackctl` gets ENOENT on apply.
+      tunnelProviderPkg = nivis-tunnel-provider.packages.x86_64-linux.terraform-provider-nivis-tunnel;
+
       # The dev shell's contents, as one list so the provider cannot be in the
       # shell for some purposes and absent for others. A test asserts the
       # provider binary the Hetzner domain execs lives under one of these.
       devShellPackagesFor = pkgs: [
         nivis.packages.${pkgs.stdenv.hostPlatform.system}.nivis
         hcloudimagePkg
+        tunnelProviderPkg
         pkgs.awscli2
         pkgs.hcloud
         pkgs.age
@@ -253,6 +274,7 @@
         pkgs.lolcat
       ];
       hcloudimageBin = "${hcloudimagePkg}/bin/terraform-provider-hcloudimage";
+      tunnelProviderBin = "${tunnelProviderPkg}/bin/terraform-provider-nivis-tunnel";
 
       # Each workload's own name under the environment's domain. Demos never
       # claim the apex — that name belongs to the operator, not to an example.
