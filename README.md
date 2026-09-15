@@ -307,6 +307,98 @@ A server, a volume and a primary IP bill by the hour.
 is x86 (`cx23`) so it builds natively on any x86_64 machine; no emulation and no
 remote builder needed.
 
+## A machine you can deploy to without being able to reach it
+
+`040_tunnel_target` is the demo the other two set up. Where they show a workload
+on two clouds, this one makes a narrower and more consequential claim: a machine
+can be deployed to while admitting nothing.
+
+Nothing in the domain opens a port. There is no elastic IP, no DNS record and no
+security group rule. The agent baked into the boot image dials **out** to a
+relay, the operator dials the same relay, and the two are spliced together.
+`nivis-tunnel connect <stream id>` is the only way in.
+
+### The split, which is the actual point
+
+There are two NixOS configurations, not one.
+
+| | what it holds | what changing it costs |
+|-------------|-------------------------------------|----------------------------|
+| boot image | boot, network, sshd, the agent | build, upload, snapshot import, new AMI, **machine replaced** |
+| live system | everything else, here nginx | a closure push and `switch-to-configuration` |
+
+The image carries only what a closure push cannot replace. On NixOS the kernel,
+initrd and bootloader all live in the closure, so what genuinely forces an image
+rebuild is the partition layout, the filesystem, the boot mode, and the agent.
+Everything else belongs in the live system.
+
+Measured on this demo, against one running machine:
+
+```
+image route   2649 MiB   ~15 min   machine replaced
+live-1          17 MiB       51s   same machine
+live-2         343 KiB        4s   same machine
+```
+
+The live system is built **on** the image's configuration rather than beside it.
+That is load-bearing: `switch-to-configuration` activates a complete description
+of the machine, so a unit the new generation does not declare gets stopped. A
+live system assembled independently would eventually stop the agent, severing
+the connection the activation itself arrived over, on a machine with no second
+route in.
+
+### Running it
+
+```sh
+# once: a relay the machine and you can both reach, and an orchestrator key
+nivis-tunnel keygen > ~/.config/nivis-tunnel/orchestrator.key
+
+# the public half, the relay address, your ssh key and the key file path go in
+# the untracked vars file (see the configuration section above)
+./stackctl demo 040_tunnel_target apply
+
+# the negative first. this must find nothing
+nmap -Pn -p- "$(./stackctl demo 040_tunnel_target output | grep public_ip | cut -d= -f2 | tr -d ' "')"
+
+# and then, anyway
+ssh -o ProxyCommand='nivis-tunnel connect poc-target-aws-01 --relay <relay> --key ~/.config/nivis-tunnel/orchestrator.key' \
+    root@poc-target-aws-01 'cat /etc/tunnel-target-generation'
+```
+
+Change `tunnelGeneration` in the vars file and apply again: the plan touches the
+activation and nothing else. The machine does not reboot and keeps its instance
+id, its snapshot and its AMI.
+
+### When the tunnel cannot help you
+
+This machine has no inbound port, so a deploy that breaks the agent leaves no
+network route back. There is no magic rollback yet, which makes the fallback
+worth knowing **before** you need it:
+
+```sh
+aws ec2 enable-serial-console-access          # once per account
+ssh-keygen -t ed25519 -f /tmp/serial -N ""
+aws ec2-instance-connect send-serial-console-ssh-public-key \
+  --instance-id <id> --serial-port 0 --ssh-public-key file:///tmp/serial.pub
+ssh -i /tmp/serial <id>.port0@serial-console.ec2-instance-connect.<region>.aws
+```
+
+The key is valid for 60 seconds, so connect straight away, and press Enter after
+connecting. Leave with `~.` rather than closing the terminal: one session is
+allowed per instance and a client that vanishes leaves it held.
+
+The serial console works without an open port, which is the only kind of
+fallback this machine can have. Try it once while nothing is wrong. A fallback
+first used during a failure is a guess.
+
+If even that fails, the machine is replaceable: the image is unchanged, so
+recreating the instance costs an instance creation and not an image rebuild.
+
+### Costs
+
+One `t3.micro`, one 12 GiB volume, and an S3 bucket holding a 2.6 GB image.
+`./stackctl demo 040_tunnel_target destroy` when you are done.
+
 ## Working on a domain
 
 ```sh
