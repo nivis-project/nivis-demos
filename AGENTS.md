@@ -85,16 +85,19 @@ nix fmt                      # format
 
 ## OpenSpec lives in a store
 
-This repo declares `store: nivis` in `openspec/config.yaml`, so there is **no
-local `openspec/specs` or `openspec/changes`** — proposals and specs live in
-`/home/pim/gh.nivis-project/ospecs` (`git@github.com:nivis-project/ospecs.git`),
-shared with the other nivis repos. Two consequences:
+This repo declares `store: nivis-demos` in `openspec/config.yaml`, so there is
+**no local `openspec/specs` or `openspec/changes`**. Proposals and specs live in
+the `nivis-demos` root of
+`/home/pim/gh.nivis-project/nivis-openspec-stores`
+(`git@github.com:nivis-project/nivis-openspec-stores.git`). That repo holds one
+root per project, so this store is this project's alone: no other repo writes to
+it. Two consequences:
 
 - `openspec archive` writes into the **store's** git repo, not this one, so
   `scripts/ship-change.sh` commits and pushes the store separately.
 - Never re-create `openspec/specs` or `openspec/changes` here. If
   `openspec doctor` starts warning that the store declaration is ignored, it is
-  because one of those directories came back — delete it.
+  because one of those directories came back, so delete it.
 
 ## Beans
 
