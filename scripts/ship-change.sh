@@ -5,7 +5,7 @@
 #   stage -> gate (nix flake check) -> archive -> commit -> push.
 # If the gate fails this aborts before archiving or committing.
 #
-# NOTE: OpenSpec planning for this repo lives in the shared `nivis` store
+# NOTE: OpenSpec planning for this repo lives in the `nivis-demos` store
 # (see openspec/config.yaml), NOT under ./openspec. The change therefore lives
 # in — and is archived into — the store's own git repo, which this script
 # commits and pushes separately from this repo.
@@ -18,7 +18,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 # Resolve the OpenSpec root instead of assuming ./openspec — here it is the
-# `nivis` store at a path outside this repo.
+# `nivis-demos` store at a path outside this repo.
 OSROOT="$(openspec context --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["root"]["path"])')"
 CHANGE_DIR="${OSROOT}/openspec/changes/${CHANGE}"
 TASKS="${CHANGE_DIR}/tasks.md"

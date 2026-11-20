@@ -34,7 +34,7 @@ beans show --json <id>       # full bean
 beans roadmap                # milestones -> epics -> tasks
 beans check                  # validate config and bean integrity
 
-# OpenSpec — planning lives in the shared `nivis` store, NOT in ./openspec
+# OpenSpec — planning lives in the `nivis-demos` store, NOT in ./openspec
 openspec context             # show which root/store resolves here
 openspec list                # active changes
 openspec doctor              # store registration health
@@ -85,10 +85,11 @@ nix fmt                      # format
 
 ## OpenSpec lives in a store
 
-This repo declares `store: nivis` in `openspec/config.yaml`, so there is **no
-local `openspec/specs` or `openspec/changes`** — proposals and specs live in
-`/home/pim/gh.nivis-project/ospecs` (`git@github.com:nivis-project/ospecs.git`),
-shared with the other nivis repos. Two consequences:
+This repo declares `store: nivis-demos` in `openspec/config.yaml`, so there is
+**no local `openspec/specs` or `openspec/changes`** — proposals and specs live in
+`/home/pim/gh.nivis-project/nivis-openspec-stores/nivis-demos`
+(`git@github.com:nivis-project/nivis-openspec-stores.git`), a repo shared with
+the other nivis projects. Two consequences:
 
 - `openspec archive` writes into the **store's** git repo, not this one, so
   `scripts/ship-change.sh` commits and pushes the store separately.

@@ -557,6 +557,11 @@
             '';
 
         # --- hygiene -----------------------------------------------------
+        readme-header = pkgs.runCommand "readme-header" { } ''
+          bash ${./scripts/check-readme-header.sh} ${./README.md} nivis-demos "examples"
+          touch $out
+        '';
+
         fmt = pkgs.runCommand "check-fmt" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
           nixfmt --check $(find ${self} -name '*.nix' -type f)
           touch $out

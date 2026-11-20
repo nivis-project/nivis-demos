@@ -1,4 +1,22 @@
-# nivis-demos
+<p align="center">
+  <a href="https://nivis.tf"><img src="https://nivis.tf/favicon.svg" alt="Nivis" width="72"></a>
+</p>
+
+<h1 align="center">nivis-demos</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-examples-2d8dd2" alt="Status: examples">
+</p>
+
+<p align="center">
+  Runnable Nivis examples, from offline fake providers to real AWS.
+</p>
+
+<p align="center">
+  <a href="https://nivis.tf">nivis.tf</a> ·
+  <a href="https://github.com/nivis-project/nivis">nivis</a> ·
+  <a href="https://docs.nivis.tf/">Docs</a>
+</p>
 
 Self-contained demo stacks for [nivis](https://github.com/nivis-project/nivis),
 the Nix-native deployment orchestrator, laid out catstack-style. Where the
@@ -430,3 +448,7 @@ See `tests/README.md`.
    value as a variable in `environments/<env>.nix` rather than a literal.
 4. Write `tests/<name>.nix` asserting on its IR — that is what the coverage gate
    counts. `stackctl` needs no edit.
+
+---
+
+<p align="center"><sub>Part of the <a href="https://nivis.tf">Nivis</a> project: Terraform providers as first-class Nix values. Main repository: <a href="https://github.com/nivis-project/nivis">nivis-project/nivis</a>.</sub></p>
