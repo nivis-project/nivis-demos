@@ -92,7 +92,10 @@ This repo declares `store: nivis-demos` in `openspec/config.yaml`, so there is
 the other nivis projects. Two consequences:
 
 - `openspec archive` writes into the **store's** git repo, not this one, so
-  `scripts/ship-change.sh` commits and pushes the store separately.
+  `scripts/ship-change.sh` commits and pushes the store separately, with the
+  store's own `scripts/store-commit.sh` and then `scripts/store-hygiene.sh`. The
+  store is jj-colocated, so plain git commits there would land on a detached
+  HEAD.
 - Never re-create `openspec/specs` or `openspec/changes` here. If
   `openspec doctor` starts warning that the store declaration is ignored, it is
   because one of those directories came back — delete it.
